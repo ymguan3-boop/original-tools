@@ -1,0 +1,11 @@
+node_modules/
+data/
+server/data/
+uploads/
+*.log
+release/win-unpacked/
+release/.icon-ico/
+release/builder-debug.yml
+release/qr-data/
+.DS_Store
+Thumbs.db

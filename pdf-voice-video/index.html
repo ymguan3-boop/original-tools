@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF轉語音影片模組</title>
+<style>
+  :root{
+    --accent:#ffd54a;
+    --accent2:#5ac8ff;
+    --bg:#0e1420;
+    --panel:rgba(16,24,38,.92);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:
+      radial-gradient(1200px 700px at 20% -10%, #1b2b4a 0%, transparent 60%),
+      radial-gradient(1000px 600px at 110% 110%, #201a38 0%, transparent 55%),
+      var(--bg);
+    color:#eef2f8;
+    font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;
+  }
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:78px 60px 128px}
+  #canvaswrap{position:relative;max-width:100%;max-height:100%}
+  #pagecanvas{
+    display:block;
+    box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+    border-radius:6px;
+    background:#fff;
+  }
+  #overlay{position:absolute;inset:0;pointer-events:none}
+  .hl{
+    position:absolute;
+    background:rgba(255,213,74,.28);
+    border-radius:2px;
+    opacity:0;
+    transition:opacity .15s ease;
+  }
+  .hl.on{opacity:1}
+
+  #subtitle{
+    position:fixed;left:50%;bottom:60px;
+    width:fit-content;
+    min-width:40px;
+    max-width:min(94vw,1100px);
+    box-sizing:border-box;
+    background:rgba(8,12,22,.95);
+    border:1px solid rgba(255,213,74,.4);
+    border-radius:10px;
+    padding:9px 16px;
+    font-size:clamp(14px,2.5vw,24px);
+    line-height:1.5;
+    letter-spacing:1px;
+    text-align:center;
+    white-space:nowrap;
+    overflow:hidden;
+    box-shadow:0 8px 28px rgba(0,0,0,.5);
+    z-index:30;
+    min-height:0;
+    opacity:0;transform:translateX(-50%) translateY(12px);
+    transition:opacity .2s, transform .2s;
+  }
+  #subtitle.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #subtext{display:inline}
+  #subtitle .sp{
+    color:rgba(255,255,255,.45);
+  }
+  #subtitle .sp.on{
+    color:var(--accent);
+    font-weight:700;
+    text-shadow:0 0 6px rgba(255,213,74,.5);
+  }
+
+  #topbar{
+    position:fixed;top:0;left:0;right:0;z-index:40;
+    display:flex;align-items:center;justify-content:center;
+    gap:8px;flex-wrap:nowrap;
+    padding:10px 14px;
+    background:linear-gradient(rgba(0,0,0,.55), transparent);
+    font-size:14px;color:#cdd6e4;
+    overflow-x:auto;
+  }
+  #pager{font-size:14px;letter-spacing:1px;white-space:nowrap}
+  #pager b{color:var(--accent);font-size:18px;margin-right:3px}
+  #voicesel{
+    background:var(--panel);color:#eef2f8;border:1px solid rgba(255,255,255,.16);
+    border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit;max-width:170px;
+  }
+  .tsep{width:1px;height:22px;background:rgba(255,255,255,.18);margin:0 4px;flex:0 0 auto}
+  #progresswrap{position:fixed;top:0;left:0;right:0;height:5px;background:rgba(255,255,255,.08);z-index:41}
+  #progress{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .1s linear}
+
+  #zoomctl{
+    position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+    display:none;gap:10px;z-index:45;
+  }
+  #zoomctl.show{display:flex}
+  #bFsExit{
+    position:fixed;top:16px;right:16px;z-index:60;
+    display:none;
+    background:rgba(8,12,22,.92);
+    border:1px solid rgba(255,255,255,.28);
+    box-shadow:0 4px 16px rgba(0,0,0,.45);
+  }
+  #bFsExit.show{display:block}
+  .btn{
+    background:var(--panel);
+    border:1px solid rgba(255,255,255,.16);
+    color:#eef2f8;
+    font-size:14px;
+    padding:6px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    font-family:inherit;
+    letter-spacing:1px;
+    transition:background .15s, transform .1s;
+    user-select:none;
+    white-space:nowrap;
+    flex:0 0 auto;
+  }
+  .btn:hover{background:#23324d}
+  .btn:active{transform:scale(.96)}
+  .btn.primary{background:var(--accent);color:#1a1a1a;border-color:var(--accent);font-weight:700}
+  .btn.primary:hover{background:#ffe07a}
+  .btn.on{background:var(--accent);color:#1a1a1a;border-color:var(--accent)}
+
+  #dots{position:fixed;bottom:22px;right:24px;display:flex;gap:8px;z-index:40;flex-wrap:wrap;max-width:40vw;justify-content:flex-end}
+  .dot{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.25);cursor:pointer;transition:background .2s, transform .2s}
+  .dot.on{background:var(--accent);transform:scale(1.25)}
+
+  #startpill{
+    position:fixed;top:70px;left:50%;transform:translateX(-50%);
+    z-index:35;
+    display:flex;align-items:center;gap:14px;
+    background:var(--panel);
+    border:1px solid rgba(255,213,74,.5);
+    border-radius:999px;
+    padding:12px 26px;
+    box-shadow:0 8px 30px rgba(0,0,0,.4);
+    cursor:pointer;
+    transition:opacity .4s, transform .2s;
+  }
+  #startpill:hover{transform:translateX(-50%) scale(1.04)}
+  #startpill .pb{
+    width:38px;height:38px;border-radius:50%;
+    background:var(--accent);color:#1a1a1a;
+    display:flex;align-items:center;justify-content:center;
+    font-size:17px;
+    animation:breath 2s ease-in-out infinite;
+  }
+  @keyframes breath{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+  #startpill span{font-size:18px;letter-spacing:2px;color:#fff}
+
+  body.fs #stage{padding:24px 40px 90px}
+  body.fs #subtitle{bottom:44px}
+
+  .hint{position:fixed;bottom:20px;left:24px;color:#7d8ca3;font-size:13px;z-index:40;letter-spacing:1px}
+
+  #toast{
+    position:fixed;top:120px;left:50%;transform:translateX(-50%);
+    background:rgba(0,0,0,.82);color:#fff;padding:10px 22px;border-radius:8px;
+    font-size:15px;z-index:70;opacity:0;transition:opacity .3s;pointer-events:none;
+    max-width:80vw;text-align:center;
+  }
+
+  #busy{
+    position:fixed;inset:0;z-index:80;
+    background:rgba(8,12,20,.82);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:22px;
+  }
+  #busy.show{display:flex}
+  .spinner{
+    width:58px;height:58px;border-radius:50%;
+    border:5px solid rgba(255,213,74,.2);
+    border-top-color:var(--accent);
+    animation:spin 1s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #busy p{font-size:19px;letter-spacing:2px;color:#eef2f8}
+  #busy small{color:#93a4bb;font-size:13px}
+
+  #file{display:none}
+
+  #editor{
+    position:fixed;inset:0;z-index:90;
+    background:rgba(6,10,18,.94);
+    display:none;
+  }
+  #editor.show{display:block}
+  #edMain{
+    position:absolute;inset:26px;
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;
+  }
+  #edPrev{
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+    padding:14px;overflow:hidden;
+  }
+  #edcanvas{max-width:100%;max-height:100%;box-shadow:0 10px 30px rgba(0,0,0,.5);background:#fff}
+  #edRight{display:flex;flex-direction:column;gap:14px}
+  #edHead{font-size:18px;letter-spacing:1px;color:#cdd6e4}
+  #edHead b{color:var(--accent);font-size:24px;margin-right:2px}
+  #edText{
+    flex:1;resize:none;
+    background:#0d1626;color:#eef2f8;
+    border:1px solid rgba(255,255,255,.16);border-radius:10px;
+    padding:16px;font-size:18px;line-height:1.7;font-family:inherit;
+    outline:none;
+  }
+  #edText:focus{border-color:var(--accent)}
+  #edEst{font-size:16px;color:#9fb0c8}
+  #edEst b{color:var(--accent);font-size:22px}
+  #edBtns{display:flex;gap:10px;flex-wrap:wrap}
+
+  #landing{
+    position:fixed;inset:0;z-index:50;
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+    padding:22px 20px;text-align:center;overflow-y:auto;
+  }
+  #landing.show{display:flex}
+  #landing h1{font-size:clamp(21px,3.1vw,31px);letter-spacing:3px;color:#eef2f8}
+  #landing .tag{color:#93a4bb;font-size:13px;letter-spacing:1px}
+  .land-card{
+    width:min(90vw,420px);padding:15px 18px;border-radius:12px;cursor:pointer;
+    background:rgba(255,255,255,.05);border:2px dashed rgba(255,213,74,.55);
+    display:flex;flex-direction:column;align-items:center;gap:7px;
+    transition:background .15s,border-color .15s;
+  }
+  .land-card:hover{background:rgba(255,255,255,.09);border-color:var(--accent)}
+  .land-card .big{font-size:28px}
+  .land-card p{color:#9fb0c8;font-size:14px;letter-spacing:1px}
+  .land-card .btn{font-size:14px;padding:7px 18px}
+  #landing #modecards{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;padding:0 10px}
+  #landing .modecard{
+    width:204px;padding:15px 14px;border-radius:12px;cursor:pointer;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);
+    text-align:center;transition:transform .15s,background .15s,border-color .15s;
+  }
+  #landing .modecard:hover{transform:translateY(-3px);background:rgba(255,255,255,.09);border-color:var(--accent)}
+  #landing .modecard .ic{font-size:28px;margin-bottom:5px}
+  #landing .modecard h3{font-size:16px;letter-spacing:2px;margin-bottom:4px;color:#eef2f8}
+  #landing .modecard p{color:#9fb0c8;font-size:12.5px;line-height:1.65}
+  #landing .land-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .credit{color:#6d7c92;font-size:12px;letter-spacing:2px;margin-top:2px}
+
+  #helpmodal{
+    position:fixed;inset:0;z-index:88;
+    background:rgba(6,10,18,.95);
+    display:none;align-items:center;justify-content:center;
+  }
+  #helpmodal.show{display:flex}
+  #helpBox{
+    width:90vw;max-width:780px;max-height:86vh;overflow-y:auto;
+    background:#0d1626;border:1px solid rgba(255,255,255,.16);
+    border-radius:14px;padding:28px 34px;color:#eef2f8;
+  }
+  #helpBox h2{font-size:24px;letter-spacing:3px;margin-bottom:18px;color:var(--accent)}
+  #helpBox .hsec{margin-bottom:16px}
+  #helpBox h3{font-size:17px;letter-spacing:1px;margin-bottom:6px;color:var(--accent2)}
+  #helpBox ul{padding-left:22px;line-height:1.9;color:#c6d1e0;font-size:14.5px}
+  #helpBox li::marker{color:var(--accent)}
+  #helpBox .btn{margin-top:8px}
+
+  #aipromptmodal{
+    position:fixed;inset:0;z-index:95;
+    background:rgba(6,10,18,.96);
+    display:none;align-items:center;justify-content:center;
+  }
+  #aipromptmodal.show{display:flex}
+  #aipromptBox{
+    width:94vw;max-width:860px;max-height:88vh;overflow-y:auto;
+    background:#0d1626;border:1px solid rgba(255,255,255,.16);
+    border-radius:14px;padding:28px 34px;color:#eef2f8;
+  }
+  #aipromptBox h2{font-size:22px;letter-spacing:2px;margin-bottom:14px;color:var(--accent)}
+  #aipromptBox .apbody{white-space:pre-wrap;line-height:1.8;color:#c6d1e0;font-size:14.5px}
+  #aipromptBox .apbody b{color:var(--accent2)}
+  #aipromptBox .btn{margin-top:14px}
+
+  </style>
+</head>
+<body>
+<div id="progresswrap"><div id="progress"></div></div>
+
+<div id="topbar" style="display:none">
+  <button class="btn" id="bHome">🏠 返回首頁</button>
+  <div id="pager">第 <b id="curpage">1</b> / <span id="totalpages">0</span> 頁</div>
+  <button class="btn" id="bEdit" style="display:none">✎ 編輯旁白</button>
+  <select id="voicesel" title="朗讀語音"></select>
+  <span class="tsep"></span>
+  <button class="btn primary" id="bPlay">▶ 試播</button>
+  <button class="btn" id="bPlayRec">▶ 播放並錄影</button>
+  <button class="btn" id="bPrev">◀ 上一頁</button>
+  <button class="btn" id="bReplay">↻ 重播</button>
+  <button class="btn on" id="bAuto">自動翻頁</button>
+  <button class="btn" id="bFull">⛶ 全螢幕</button>
+  <button class="btn" id="bNext">下一頁 ▶</button>
+</div>
+
+<button class="btn" id="bFsExit" title="回到瀏覽器">✕ 回到瀏覽器</button>
+
+<div id="stage">
+  <div id="canvaswrap">
+    <canvas id="pagecanvas"></canvas>
+    <div id="overlay"></div>
+  </div>
+</div>
+
+<div id="subtitle"><span id="subtext"></span></div>
+
+<div id="zoomctl">
+  <button class="btn" id="bZoomOut">－ 縮小</button>
+  <button class="btn" id="bZoomReset">適中</button>
+  <button class="btn" id="bZoomIn">放大 ＋</button>
+  <button class="btn" id="bFullExit">⛶ 退出全螢幕</button>
+</div>
+
+<div id="dots"></div>
+<div class="hint">首頁選取 PDF 並選擇模式　空白鍵 播放/暫停　← → 換頁　F 全螢幕　R 重播</div>
+
+<div id="startpill" style="display:none"><div class="pb">▶</div><span>點此開始朗讀</span></div>
+
+<div id="landing">
+  <h1>PDF轉語音影片模組</h1>
+  <p class="tag">將 PDF 變成逐字朗讀、可錄影輸出的語音影片</p>
+  <div class="land-card" id="landFile">
+    <div class="big">📄</div>
+    <p>點擊選檔或將 PDF 拖曳到這裡</p>
+    <button class="btn primary" id="landPick">📄 選擇 PDF 檔案</button>
+  </div>
+  <div id="modecards">
+    <div class="modecard" data-mode="underline">
+      <div class="ic">🟡</div>
+      <h3>底線導讀</h3>
+      <p>自動偵測 PDF 中的底線文字，朗讀並同步黃色遮罩與字幕</p>
+    </div>
+    <div class="modecard" data-mode="custom">
+      <div class="ic">✎</div>
+      <h3>自訂語音</h3>
+      <p>為每一頁自行輸入要朗讀的文字，作為語音與字幕來源</p>
+    </div>
+  </div>
+  <div class="land-actions">
+    <button class="btn" id="landHelp">❓ 使用說明</button>
+  </div>
+  <div class="credit">製作者 官毅明</div>
+</div>
+
+<div id="toast"></div>
+<input type="file" id="file" accept=".pdf,application/pdf">
+
+<div id="editor">
+  <div id="edMain">
+    <div id="edPrev"><canvas id="edcanvas"></canvas></div>
+    <div id="edRight">
+      <div id="edHead">自訂語音文字　第 <b id="edPage">1</b> / <span id="edTotal">0</span> 頁</div>
+      <textarea id="edText" placeholder="輸入此頁要朗讀的文字（作為語音與字幕來源）&#10;留空則此頁播放 1 秒後自動翻頁"></textarea>
+      <div id="edEst">預估播放：<b id="edSec">—</b></div>
+      <div id="edBtns">
+        <button class="btn" id="edPrevBtn">◀ 上一頁</button>
+        <button class="btn" id="edNextBtn">下一頁 ▶</button>
+        <button class="btn primary" id="edPlay">▶ 確認並播放</button>
+        <button class="btn" id="edRecord">🎥 錄影並播放</button>
+        <button class="btn" id="edClose">✕ 關閉</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="helpmodal">
+  <div id="helpBox">
+    <h2>使用說明</h2>
+    <div class="hsec">
+      <h3>共通操作</h3>
+      <ul>
+        <li>在首頁點「📄 選擇 PDF 檔案」或直接把 PDF 拖進視窗，載入後點「🟡 底線導讀」或「✎ 自訂語音」即可開始。</li>
+        <li>工具列「▶ 試播」試聽本頁朗讀，「❚❚ 暫停」暫停；「↻ 重播」重播目前頁；「🏠 返回首頁」可隨時回首頁切換模式。</li>
+        <li>鍵盤：空白鍵＝播放／暫停、← →＝換頁、F＝全螢幕、R＝重播、Esc＝關閉彈窗／停止。</li>
+        <li>點「▶ 試播」或「▶ 播放並錄影」會<b>自動進入全螢幕</b>，PDF 自動置中；停止播放即回到瀏覽器。</li>
+        <li>全螢幕時僅右上角保留「✕ 回到瀏覽器」按鈕，其餘工具列、縮放與翻頁按鈕一律隱藏。</li>
+        <li>字幕隨語音<b>逐字即時同步</b>顯示，底部深色底框（95% 不透明），已朗讀的字以金色高亮。</li>
+      </ul>
+    </div>
+    <div class="hsec">
+      <h3>模式一：底線導讀</h3>
+      <ul>
+        <li>自動偵測 PDF 中的<b>底線文字</b>並朗讀，黃色遮罩與字幕隨語音同步。</li>
+        <li>語音會略過文章中的標點與表情符號（例如「;D」只唸「D」），避免誤念；字幕仍顯示原文。</li>
+        <li>「▶ 播放並錄影」：一邊播放一邊錄製畫面與語音，播到最後一頁自動停止並下載影片（WebM）。</li>
+      </ul>
+    </div>
+    <div class="hsec">
+      <h3>模式二：自訂語音</h3>
+      <ul>
+        <li>為每一頁自行輸入要朗讀的文字，作為語音與字幕來源。</li>
+        <li>左側為該頁 PDF 預覽，右側輸入文字並即時預估秒數；留空則該頁 1 秒後自動翻頁。</li>
+        <li>「▶ 確認並播放」開始播放；「🎥 錄影並播放」同時錄製畫面與語音。</li>
+        <li>🔧 <a id="helpAiPrompt" href="javascript:void(0)" style="color:var(--accent);text-decoration:underline">使用AI生成簡報語音提示詞方法</a>：可將 PDF 資料丟進任何 AI，用提示詞產生每一頁的演講逐字稿，再貼進自訂欄位。</li>
+      </ul>
+    </div>
+    <div class="hsec">
+      <h3>錄影注意事項</h3>
+      <ul>
+        <li>請使用 Chrome 或 Edge。點「▶ 播放並錄影」後瀏覽器會要求分享畫面與音訊，請選取<b>「整個螢幕」或某個視窗</b>，並勾選<b>「分享系統音訊」（Share system audio）</b>。</li>
+        <li>朗讀語音（speechSynthesis）不會進入「分享此頁籤」的音訊捕捉（瀏覽器限制，Chromium bug 40753195），因此<b>必須分享整個螢幕＋開啟系統音訊</b>才能錄到語音。</li>
+        <li>程式<b>不開啟麥克風</b>，避免錄到外在／環境聲音；錄音時音量已自動放大＋壓縮。</li>
+        <li>影片由程式<b>直接合成</b>（頁面＋黃色高亮＋字幕），字幕已燒錄進影片；輸出為 WebM（VP9／Opus）。</li>
+        <li>若開錄後約 3 秒出現「偵測不到系統音訊」提示，代表沒錄到語音，請停止後重新錄製並確認上述選項。</li>
+        <li>播放途中按「⏹ 停止」或 Esc 可提前結束並下載影片。</li>
+      </ul>
+    </div>
+    <button class="btn primary" id="helpClose">✕ 關閉</button>
+  </div>
+</div>
+
+<div id="aipromptmodal">
+  <div id="aipromptBox">
+    <h2>使用AI生成簡報語音提示詞方法</h2>
+    <div class="apbody">可將PDF資料丟進任何AI,並以下方提示詞產生各頁的逐字稿並貼入自訂欄位:
+
+核心提示詞公式
+角色設定 + 語氣與受眾 + 處理指令（口語化與轉場）+ 輸出格式 + [貼上你的資料]
+
+🚀 實戰提示詞範本（可以直接複製修改）
+您可以直接複製以下提示詞，並根據您的需求替換中括號 [...] 的內容。
+
+範本一：標準商務 / 專業匯報風格（適合一般工作報告）
+「你現在是一位口條清晰、極具說服力的[資深專案經理]。
+我將提供你一份關於 [2026年第三季行銷成效] 的簡報資料（或PDF內容擷取）。請根據這些資料，為『每一頁』撰寫演講逐字稿。
+
+【寫作要求】
+
+受眾與語氣： 聽眾是[公司高階主管與跨部門同事]。語氣需專業、自信且條理分明。
+
+完全口語化： 請將生硬的條列式文字，轉換為自然說話的口吻。不要只是照唸標題，要用引言或提問來帶出重點。
+
+流暢轉場： 每一頁的結尾，請加上一句自然的「轉場句」，用來順暢地銜接下一頁的內容。
+
+時間控制： 請將每一頁的逐字稿字數控制在 [150 - 200] 字左右（約演講 1 分鐘的長度）。
+
+【輸出格式】
+請以表格或條列式輸出，包含以下欄位：
+
+頁碼與標題：
+
+該頁核心講點（1句話總結）：
+
+演講逐字稿：
+
+動作或語氣提示：（例如：在此處停頓2秒、手勢引導看圖表等）
+
+以下是我的簡報資料：
+[在此貼上您的 PDF 內文、大綱或各頁重點資料]」
+
+範本二：生動說故事 / TED 演講風格（適合發表會、培訓、分享）
+「你現在是一位充滿熱情且擅長說故事的[品牌演講者]。
+我有一份關於 [全新產品介紹] 的簡報資料，總共 [10] 頁。請幫我把這些冷冰冰的資料，轉化為一場引人入勝的演講逐字稿。
+
+【寫作要求】
+
+開場與破冰： 第一頁請幫我設計一個強而有力的開場（例如：一個令人驚訝的數據、一個反問句或一個小故事）來抓住觀眾注意力。
+
+情感連結： 在講解數據或功能時，請多用生活化的比喻或強調『這對聽眾有什麼好處』。
+
+口語化表達： 句子要簡短好唸，多用『我們』、『大家』等字眼拉近距離。
+
+【輸出格式】
+請逐頁列出：
+第 X 頁：[頁面標題]
+🗣️ 逐字稿： (此處填寫口語化腳本)
+💡 舞台指示： (例如：微笑環視觀眾、語氣加重)
+🔗 銜接下一頁的轉場台詞： (一句話)
+
+以下是各頁的簡報內容：
+[在此貼上您的資料]」
+
+💡 丟入資料給 AI 時的 3 個小技巧
+分批餵資料（如果 PDF 很多頁）：
+如果簡報超過 15-20 頁，建議分批丟給 AI。例如：「先幫我生成第 1 到第 5 頁的逐字稿，這是我前 5 頁的資料：...」。這樣 AI 寫出來的品質會最精細，不會因為字數限制而草草帶過。
+
+告訴 AI 頁面上的「圖表」是什麼：
+如果你把 PDF 的文字貼給 AI，AI 看不到圖。你可以在資料裡備註：「（第3頁資料：這裡有一張營收成長 20% 的折線圖）」，AI 就會在逐字稿裡寫出：「大家請看畫面上的折線圖，我們可以看到...」這樣會逼真很多！
+
+先給框架，再給資料：
+如果檔案很大（直接上傳 PDF 檔），你可以先發送上面的「提示詞」，並在最後加一句：「如果你了解任務了，請回覆『請提供簡報資料』，我接著會把資料傳給你。」 這樣能確保 AI 完全吸收了你的寫作規則。</div>
+    <button class="btn primary" id="aipromptClose">✕ 關閉</button>
+  </div>
+</div>
+
+<div id="busy">
+  <div class="spinner"></div>
+  <p id="busyText">正在分析 PDF…</p>
+  <small>渲染頁面 → 偵測底線 → 準備語音，請稍候</small>
+</div>
+
+<script src="lib/pdf.min.js"></script>
+<script src="lib/pdf.worker.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='lib/pdf.worker.min.js';
+
+const $=s=>document.querySelector(s);
+const canvas=$('#pagecanvas'), canvasWrap=$('#canvaswrap'), overlay=$('#overlay');
+const subtext=$('#subtext'), subEl=$('#subtitle');
+let pdfDoc=null;
+let pagesData=[];   // [{pageNum, baseW, baseH, segs:[{text,rects:[user-space [x,y,w,h]]}]}]
+let pi=0, segIdx=0, playing=false, autoAdvance=true;
+let displayScale=1, zoom=1;
+let hls=[], spans=[], segRectStart=[];
+let curSeg=null, curUtt=null, revealTimer=null, curSegStart=0, watchdog=null;
+let curVoice=null;
+let manualStop=false, advToken=0, lastCancel=0;
+let customMode=false, customTexts={}, edPi=0, advanceTimer=null;
+let boundarySeen=false;
+let mode='underline';
+let rec=null;
+let screen='landing';
+let segPlan=[], segPlanOrigIdx=[], segSpeechStart=[], curCustomPlan=null;
+
+/* ---------- 語音 ---------- */
+function refreshVoices(){
+  const voices=speechSynthesis.getVoices();
+  const zh=voices.filter(v=>v.lang&&v.lang.toLowerCase().startsWith('zh'));
+  const sel=$('#voicesel');
+  const prev=sel.value;
+  sel.innerHTML='';
+  const opt=document.createElement('option');
+  opt.value=''; opt.textContent='自動選擇語音'; sel.appendChild(opt);
+  zh.forEach(v=>{
+    const o=document.createElement('option');
+    o.value=v.name; o.textContent=v.name+' ('+v.lang+')';
+    sel.appendChild(o);
+  });
+  if(zh.some(v=>v.name===prev)) sel.value=prev;
+}
+function pickVoice(){
+  const v=curVoice;
+  if(v) return v;
+  const voices=speechSynthesis.getVoices();
+  const zh=voices.filter(v=>v.lang&&v.lang.toLowerCase().startsWith('zh'));
+  const score=v=>{
+    const s=(v.lang+' '+v.name).toLowerCase();
+    let n=0;
+    if(/natural|online/.test(s)) n+=10;
+    if(/tw|hant|taiwan|台灣|臺灣/.test(s)) n+=5;
+    if(/google/.test(s)) n+=3;
+    if(/hanhan|hsiao|xiaoxiao|hsiaochen|yating|zhiwei|vick/.test(s)) n+=2;
+    if(/cn|simplified|中國大陸/.test(s)) n-=8;
+    return n;
+  };
+  const best=[...zh].sort((a,b)=>score(b)-score(a))[0];
+  return best||null;
+}
+if(window.speechSynthesis){
+  refreshVoices();
+  speechSynthesis.onvoiceschanged=refreshVoices;
+  $('#voicesel').onchange=e=>{curVoice=speechSynthesis.getVoices().find(v=>v.name===e.target.value)||null;};
+  speechSynthesis.getVoices();
+}
+function estSecs(text){
+  if(!text) return 1;
+  const ch=Math.max(1,[...text].length);
+  const pauses=([...text].filter(c=>('。！？；').indexOf(c)>=0).length);
+  // rate=0.9 的中文 TTS 單字約 0.31 秒，句讀額外停頓約 0.55 秒
+  return Math.max(1.5, ch*0.31 + pauses*0.55);
+}
+function estDurationMs(text){
+  return Math.round(estSecs(text)*1000);
+}
+
+/* ---------- 語音發音正規化 ---------- */
+// 標點/句讀：中文 TTS 不會「唸出」標點，而是以標點製造語氣停頓（更有抑揚、更人性化），
+// 故遇到句讀標點時「保留」該字元作為停頓訊號；其餘符號才換成空白或不唸。
+const SPEECH_PAUSE=new Set('，。！？；、：'.split(''));   // 保留：製造語氣停頓
+const SPEECH_SPACE=new Set('…—─～~ .,;:!?'.split(''));   // 換成空白：輕微停頓
+// 括號、引號與裝飾符號：完全不唸
+const SPEECH_REMOVE=new Set('（）()[]{}「」『』《》〈〉【】〔〕［］“”‘’"\'<>＊*＃#§☆★○●◎◇◆□■△▲▽▼→←↑↓↗↘①②③④⑤⑥⑦⑧⑨⑩™®©'.split(''));
+// 少數符號：轉成口語念法
+const SPEECH_REPLACE={'＆':' 和 ','&':' 和 ','＋':' 加 ','+':' 加 ','＝':' 等於 ','=':' 等於 ','×':' 乘以 ','÷':' 除以 ','±':' 正負 ','°':' 度 ','℃':' 攝氏度 ','％':' 百分之 '};
+function makeSpeechPlan(text){
+  // 回傳 { speech, toLocal }：speech 為發音用的字串；
+  // toLocal[u] 表示 speech 第 u 個字元（UTF-16 單位）對應到原文第幾個字元（code point）。
+  const cps=[...text];
+  const parts=[];
+  const toLocal=[];
+  let i=0;
+  while(i<cps.length){
+    const cp=cps[i];
+    // 原則：標點符號一律依「標準標點處理」走（停頓／空白／移除），
+    // 不再把 : ; 後接字母的組合誤判成表情符號（如「;D」中 ; 是分號，非眨眼表情）。
+    const rep=SPEECH_REPLACE[cp];
+    let piece;
+    if(rep!==undefined) piece=rep;
+    else if(SPEECH_PAUSE.has(cp)) piece=cp;   // 保留句讀標點 → 製造語氣停頓
+    else if(SPEECH_SPACE.has(cp)) piece=' ';
+    else if(SPEECH_REMOVE.has(cp)) piece='';
+    else if(cp.length>1) piece='';   // 代理對（emoji 等）不唸
+    else piece=cp;
+    if(piece){ parts.push(piece); for(let k=0;k<piece.length;k++) toLocal.push(i); }
+    i++;
+  }
+  return {speech:parts.join(''), toLocal};
+}
+
+/* ---------- PDF 底線分析 ---------- */
+async function analyzePage(page){
+  const textContent=await page.getTextContent();
+  const opList=await page.getOperatorList();
+  const OPS=pdfjsLib.OPS;
+  // 閱讀順序字元
+  const chars=[];
+  for(const it of textContent.items){
+    if(!it.str) continue;
+    const t=it.transform;
+    const f=t[5], e=t[4];
+    const w=it.width||0, h=it.height||12;
+    const cs=[...it.str];
+    const cw=cs.length?w/cs.length:0;
+    let cx=e;
+    for(const ch of cs){
+      chars.push({x0:cx, x1:cx+cw, base:f, h, ch, gi:chars.length});
+      cx+=cw;
+    }
+  }
+  // 底線矩形
+  let fillColor=null;
+  const fillStack=[];
+  const rects=[];
+  const fn=opList.fnArray, args=opList.argsArray;
+  for(let i=0;i<fn.length;i++){
+    const op=fn[i];
+    if(op===OPS.save){ fillStack.push(fillColor); }
+    else if(op===OPS.restore){ fillColor=fillStack.length?fillStack.pop():null; }
+    else if(op===OPS.setFillRGBColor){
+      const c=args[i]; fillColor=[Math.round(c[0]*255),Math.round(c[1]*255),Math.round(c[2]*255)];
+    }
+    else if(op===OPS.setFillGray){ const g=args[i][0]; fillColor=[Math.round(g*255),Math.round(g*255),Math.round(g*255)]; }
+    else if(op===OPS.setFillCMYKColor){ fillColor=args[i].slice(0,4); }
+    else if(op===OPS.rectangle){
+      const r=args[i];
+      if(r&&r.length>=4){
+        const x=r[0], y=r[1], w=r[2], h=r[3];
+        if(h<4&&w>5&&x>0&&y>0){
+          rects.push({x,y,w,h,color:fillColor});
+        }
+      }
+    }
+    else if(op===OPS.constructPath){
+      const opsA=args[i][0];
+      if(opsA&&opsA.includes(OPS.rectangle)){
+        const r=args[i][1];
+        if(r&&r.length>=4){
+          const x=r[0], y=r[1], w=r[2], h=r[3];
+          if(h<4&&w>5&&x>0&&y>0){
+            rects.push({x,y,w,h,color:fillColor});
+          }
+        }
+      }
+    }
+  }
+  // 對應文字
+  const segs=[];
+  for(const r of rects){
+    const covered=[];
+    const cy=r.y+r.h/2;
+    for(const c of chars){
+      if(!c.ch.trim()) continue;
+      const top=c.base+c.h*0.35;
+      const bottom=c.base-c.h*0.9;
+      if(cy>=bottom-2&&cy<=top+2){
+        const ccx=(c.x0+c.x1)/2;
+        if(ccx>=r.x-1&&ccx<=r.x+r.w+1){ covered.push(c.gi); }
+      }
+    }
+    if(!covered.length) continue;
+    const lo=Math.min(...covered), hi=Math.max(...covered);
+    const text=chars.slice(lo,hi+1).map(c=>c.ch).filter(s=>s.trim()!=='').join('');
+    if(!text.trim()) continue;
+    segs.push({text, rects:[[r.x,r.y,r.w,r.h]], lo, hi, color:r.color?r.color.join(','):null});
+  }
+  segs.sort((a,b)=>a.lo-b.lo);
+  const merged=[];
+  for(const s of segs){
+    if(merged.length&&merged[merged.length-1].color===s.color&&(s.lo-merged[merged.length-1].hi)<=1){
+      const m=merged[merged.length-1];
+      m.text+=s.text;
+      m.rects.push(...s.rects);
+      m.hi=s.hi;
+    }else{
+      merged.push({text:s.text, rects:s.rects.map(r=>r.slice()), color:s.color});
+    }
+  }
+  return merged;
+}
+
+/* ---------- PDF 載入 ---------- */
+async function loadPdf(data){
+  showBusy(true,'正在開啟 PDF…');
+  stopAll();
+  if(screen==='landing') leaveCustomMode();
+  try{
+    pdfDoc=await pdfjsLib.getDocument({data, isEvalSupported:false}).promise;
+    pagesData=[];
+    customTexts={};
+    const n=pdfDoc.numPages;
+    $('#totalpages').textContent=n;
+    for(let pn=1;pn<=n;pn++){
+      $('#busyText').textContent='正在分析第 '+pn+' / '+n+' 頁…';
+      const page=await pdfDoc.getPage(pn);
+      const base=page.getViewport({scale:1});
+      const segs=await analyzePage(page);
+      pagesData.push({pageNum:pn, baseW:base.width, baseH:base.height, segs});
+    }
+    pi=0;
+    buildDots();
+    if(screen==='mode'){ await renderPage(); }
+    const segCount=pagesData.reduce((a,p)=>a+p.segs.length,0);
+    toast('已載入 '+n+' 頁，偵測到 '+segCount+' 段底線');
+  }catch(err){
+    toast('無法讀取 PDF：'+err.message);
+    console.error(err);
+  }
+  showBusy(false);
+}
+
+function buildDots(){
+  const dots=$('#dots'); dots.innerHTML='';
+  pagesData.forEach((p,i)=>{
+    const d=document.createElement('div');
+    d.className='dot'+(i===0?' on':'');
+    d.onclick=()=>{stopAll();pi=i;renderPage();};
+    dots.appendChild(d);
+  });
+}
+
+let renderChain=Promise.resolve(), renderSeq=0;
+function renderPage(){
+  const seq=++renderSeq;
+  renderChain=renderChain.then(()=>doRender(seq)).catch(()=>{});
+  return renderChain;
+}
+async function doRender(seq){
+  if(seq!==renderSeq) return;
+  if(!pdfDoc||!pagesData.length) return;
+  const p=pagesData[pi];
+  const page=await pdfDoc.getPage(p.pageNum);
+  const stage=$('#stage');
+  const st=stage.getBoundingClientRect();
+  const availW=Math.max(60,st.width-40), availH=Math.max(60,st.height-40);
+  const scale=Math.min(availW/p.baseW, availH/p.baseH)*zoom;
+  displayScale=scale;
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const vp=page.getViewport({scale:scale*dpr});
+  canvas.width=Math.floor(vp.width);
+  canvas.height=Math.floor(vp.height);
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  const rt=page.render({canvasContext:ctx, viewport:vp});
+  try{ await rt.promise; }
+  catch(err){
+    if(err&&err.name==='RenderingCancelledException') return;
+    throw err;
+  }
+  canvas.style.width=Math.floor(p.baseW*scale)+'px';
+  canvas.style.height=Math.floor(p.baseH*scale)+'px';
+  // 高亮
+  overlay.innerHTML=''; hls=[]; segRectStart=[];
+  p.segs.forEach(seg=>{
+    segRectStart.push(hls.length);
+    seg.rects.forEach(r=>{
+      const el=document.createElement('div');
+      el.className='hl';
+      overlay.appendChild(el);
+      hls.push({el, r});
+    });
+  });
+  layoutHL();
+  // 自訂模式：字幕需顯示「使用者輸入的文字」；底線模式才依迴路顯示底線段
+  if(mode==='custom'){ buildTextSubtitle((customTexts[pi]||'').trim()); }
+  else buildSubtitle(p);
+  $('#curpage').textContent=pi+1;
+  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('on',i===pi));
+  $('#progress').style.width='0%';
+  if(playing&&curSeg&&mode!=='custom'){
+    const si=p.segs.indexOf(curSeg);
+    if(si>=0){
+      const from=segRectStart[si];
+      hls.forEach((h,i)=>h.el.classList.toggle('on', i>=from&&i<from+curSeg.rects.length));
+    }
+  }
+}
+
+function layoutHL(){
+  const p=pagesData[pi]; if(!p) return;
+  const s=displayScale;
+  const cssH=p.baseH*s;
+  hls.forEach(h=>{
+    const r=h.r;
+    const x=r[0]*s;
+    const yTop=cssH-(r[1]+r[3])*s;
+    h.el.style.left=Math.round(x-5)+'px';
+    h.el.style.top=Math.round(yTop-24)+'px';
+    h.el.style.width=Math.round(r[2]*s+10)+'px';
+    h.el.style.height='28px';
+  });
+}
+
+/* ---------- 字幕：整行一次顯示（隨語音切換目前片段） ---------- */
+let subShownText='';
+function buildSegSpans(text){
+  spans=[]; subtext.innerHTML='';
+  subShownText='';
+  for(const ch of text){
+    const sp=document.createElement('span');
+    sp.className='sp'; sp.textContent=ch;
+    subtext.appendChild(sp); spans.push(sp);
+  }
+}
+function showFull(text){
+  buildSegSpans(text);
+  spans.forEach(s=>s.classList.add('on'));
+  subShownText=text;
+  fitSubtitle();
+}
+// 字幕單行顯示：文字過長時縮小字級使其完整落在底框內，不換行也不截斷
+function fitSubtitle(){
+  subEl.style.fontSize='';
+  const maxW=parseFloat(getComputedStyle(subEl).maxWidth)||Math.max(200, window.innerWidth*0.94);
+  const base=parseFloat(getComputedStyle(subEl).fontSize)||20;
+  const sw=subEl.scrollWidth;
+  const cw=Math.min(subEl.clientWidth||maxW, maxW);
+  if(sw>cw&&sw>0){
+    subEl.style.fontSize=Math.max(11, base*cw/sw)+'px';
+  }
+}
+function rebuildSubFor(text){
+  showFull(text);
+}
+function buildSubtitle(p){
+  const seg=p.segs[0]; rebuildSubFor(seg?seg.text:'');
+}
+function showSubForSeg(p,idx){
+  const seg=p.segs[idx]; if(seg) rebuildSubFor(seg.text);
+}
+function buildTextSubtitle(text){
+  rebuildSubFor(text);
+}
+
+/* ---------- 播放 ---------- */
+function startPlayback(){
+  if(!pagesData.length) return;
+  if(mode==='custom'){ beginCustomPlayback(); return; }
+  manualStop=false;
+  playing=true;
+  $('#bPlay').textContent='❚❚ 暫停';
+  hideStartPill();
+  enterFs();
+  pageUtter();
+}
+
+function pageUtter(){
+  if(!playing) return;
+  const p=pagesData[pi];
+  if(!p.segs.length){ onPageEnd(); return; }
+  curSegStart=performance.now();
+  segIdx=0; curSeg=p.segs[0];
+  boundarySeen=false;
+  // 逐段建立「語音計畫」：標點／符號不唸，避免語音唸出「分號」等
+  const plans=p.segs.map(s=>makeSpeechPlan(s.text));
+  const nonEmpty=[];
+  plans.forEach((pl,i)=>{ if(pl.speech.length) nonEmpty.push({pl,i}); });
+  segPlan=nonEmpty.map(x=>x.pl);
+  segPlanOrigIdx=nonEmpty.map(x=>x.i);
+  segSpeechStart=[];
+  let acc=0;
+  nonEmpty.forEach((x,k)=>{ segSpeechStart[k]=acc; acc+=x.pl.speech.length+1; });
+  const speechText=nonEmpty.map(x=>x.pl.speech).join('、');
+  if(!speechText){ onPageEnd(); return; }
+  const total=estDurationMs(speechText);
+  // 同頁以單一 utterance 朗讀（'、' 產生些微停頓），遮罩/字幕優先以 boundary 事件同步實際語音
+  scheduleSegs(p);
+  setHighlight(p,0);
+  showSubForSeg(p,0);
+  const u=new SpeechSynthesisUtterance(speechText);
+  u.lang='zh-TW';
+  const v=pickVoice(); if(v) u.voice=v;
+  u.rate=0.9; u.pitch=1; u.volume=0.7;
+  u.onstart=()=>{ subEl.classList.add('show'); };
+  u.onboundary=ev=>{
+    if(!playing) return;
+    boundarySeen=true;
+    syncToChar(p, (ev&&ev.charIndex!=null)?ev.charIndex:0);
+  };
+  const done=()=>{
+    if(!playing) return;
+    if(watchdog){clearTimeout(watchdog);watchdog=null;}
+    cancelSpeech();
+    subEl.classList.remove('show');
+    onPageEnd();
+  };
+  u.onend=done;
+  u.onerror=e=>{ console.warn('speech error',e.error); done(); };
+  curUtt=u;
+  const doSpeak=()=>{
+    curUtt=u;
+    subEl.classList.add('show');
+    speechSynthesis.speak(u);
+    if(watchdog){clearTimeout(watchdog);}
+    watchdog=setTimeout(()=>{ console.warn('speech watchdog: 強制翻頁'); done(); }, total+8000);
+  };
+  if(performance.now()-lastCancel<120){ setTimeout(doSpeak,70); } else { doSpeak(); }
+}
+
+function syncToChar(p, charIdx){
+  if(!segPlan.length) return;
+  let k=0;
+  for(let i=0;i<segSpeechStart.length;i++){ if(charIdx>=segSpeechStart[i]) k=i; }
+  const origIdx=segPlanOrigIdx[k];
+  if(origIdx!==segIdx){
+    segIdx=origIdx; curSeg=p.segs[origIdx]; setHighlight(p,origIdx);
+    showSubForSeg(p,origIdx);
+  }
+}
+
+let segTimers=[];
+function clearSegTimers(){
+  segTimers.forEach(t=>clearTimeout(t));
+  segTimers=[];
+}
+function scheduleSegs(p){
+  clearSegTimers();
+  let acc=0;
+  for(let i=1;i<p.segs.length;i++){
+    acc+=estDurationMs(p.segs[i-1].text);
+    const t=setTimeout(()=>{
+      if(!playing) return;
+      if(boundarySeen) return;   // boundary 事件已主導
+      segIdx=i;
+      curSeg=p.segs[i];
+      setHighlight(p,i);
+      showSubForSeg(p,i);
+    }, acc);
+    segTimers.push(t);
+  }
+}
+function setHighlight(p,idx){
+  const from=segRectStart[idx];
+  hls.forEach((h,i)=>h.el.classList.toggle('on', i>=from&&i<from+p.segs[idx].rects.length));
+}
+
+function cancelSpeech(){
+  lastCancel=performance.now();
+  if(window.speechSynthesis){ try{speechSynthesis.cancel();}catch(e){} }
+}
+
+function onPageEnd(){
+  $('#progress').style.width='100%';
+  if(autoAdvance&&pi<pagesData.length-1){
+    pi++;
+    stopAll(false);
+    const tk=advToken;
+    manualStop=false;
+    renderPage().then(()=>{
+      setTimeout(()=>{ if(!manualStop&&tk===advToken) startPlayback(); }, 1100);
+    });
+  }else{
+    stopAll(true);
+    if(rec) stopRecording();
+    else toast('播放完成');
+  }
+}
+
+function stopAll(showPill){
+  manualStop=true;
+  advToken++;
+  playing=false;
+  cancelSpeech();
+  curUtt=null;
+  if(watchdog){clearTimeout(watchdog);watchdog=null;}
+  if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null;}
+  if(revealTimer){clearInterval(revealTimer);revealTimer=null;}
+  clearSegTimers();
+  hls.forEach(h=>h.el.classList.remove('on'));
+  spans.forEach(s=>{s.style.opacity=0;s.classList.remove('on');});
+  subShownText='';
+  subEl.classList.remove('show');
+  $('#bPlay').textContent='▶ 試播';
+  if(!rec) exitFs();
+  if(showPill) showStartPill();
+}
+
+function togglePlay(){
+  if(screen!=='mode') return;
+  if(playing){ stopAll(false); }
+  else{
+    advToken++; manualStop=false; segIdx=0;
+    if(mode==='custom') resumeCustomPlayback();
+    else startPlayback();
+  }
+}
+function resumeCustomPlayback(){
+  if(!pagesData.length) return;
+  manualStop=false; playing=true;
+  $('#bPlay').textContent='❚❚ 暫停';
+  hideStartPill();
+  enterFs();
+  playCustomPage();
+}
+
+function hideStartPill(){ const p=$('#startpill'); p.style.opacity=0; p.style.pointerEvents='none'; }
+function showStartPill(){ const p=$('#startpill'); p.style.opacity=1; p.style.pointerEvents='auto'; }
+
+/* ---------- 進度 ---------- */
+setInterval(()=>{
+  if(!playing||!pagesData.length) return;
+  if(mode==='custom'){
+    const txt=(customTexts[pi]||'').trim();
+    if(!txt){ $('#progress').style.width='0%'; return; }
+    const total=estDurationMs(txt)||1;
+    const done=Math.min(total, performance.now()-(curSegStart||0));
+    $('#progress').style.width=Math.min(100, done/total*100)+'%';
+    return;
+  }
+  const p=pagesData[pi];
+  if(!p.segs.length){ return; }
+  const total=estDurationMs(p.segs.map(s=>s.text).join(' '))||1;
+  const done=Math.min(total, performance.now()-(curSegStart||0));
+  $('#progress').style.width=Math.min(100, done/total*100)+'%';
+},150);
+
+/* ---------- 首頁與模式選擇 ---------- */
+function showLanding(){
+  stopAll(false);
+  screen='landing';
+  $('#landing').classList.add('show');
+  $('#topbar').style.display='none';
+  $('#stage').style.display='none';
+  $('#dots').style.display='none';
+  $('.hint').style.display='none';
+  $('#startpill').style.display='none';
+  $('#zoomctl').classList.remove('show');
+  $('#subtitle').classList.remove('show');
+  document.body.classList.remove('fs');
+}
+function enterMode(m){
+  if(!pagesData.length){ toast('請先選取 PDF 檔案'); return; }
+  setMode(m);
+  screen='mode';
+  $('#landing').classList.remove('show');
+  $('#topbar').style.display='';
+  $('#stage').style.display='';
+  $('#dots').style.display='';
+  $('.hint').style.display='';
+  $('#startpill').style.display='flex';
+  renderPage();
+}
+function enterCustomMode(){
+  mode='custom'; customMode=true;
+  $('#bEdit').style.display='';
+}
+function leaveCustomMode(){
+  mode='underline'; customMode=false;
+  $('#bEdit').style.display='none';
+}
+function setMode(m){
+  stopAll(true);
+  if(m==='custom') enterCustomMode(); else leaveCustomMode();
+  if(m==='custom') openEditor();
+}
+
+/* ---------- 自訂語音文字模式 ---------- */
+function openEditor(){
+  if(!pagesData.length){ toast('請先選取 PDF'); return; }
+  $('#editor').classList.add('show');
+  edPi=pi;
+  syncEditor();
+}
+function closeEditor(){ $('#editor').classList.remove('show'); }
+function syncEditor(){
+  $('#edPage').textContent=edPi+1;
+  $('#edTotal').textContent=pagesData.length;
+  $('#edText').value=customTexts[edPi]||'';
+  updateEst();
+  renderEdPreview();
+}
+function updateEst(){
+  const txt=$('#edText').value.trim();
+  const secs=txt?Math.max(1,Math.ceil(estSecs(txt))):1;
+  $('#edSec').textContent=secs+' 秒'+(txt?'':'（留空：1 秒後翻頁）');
+}
+function renderEdPreview(){
+  const p=pagesData[edPi]; if(!p||!pdfDoc) return;
+  const ec=$('#edcanvas');
+  pdfDoc.getPage(p.pageNum).then(page=>{
+    const scale=Math.min(300/p.baseW, 400/p.baseH);
+    const dpr=Math.min(2,window.devicePixelRatio||1);
+    const vp=page.getViewport({scale:scale*dpr});
+    ec.width=Math.floor(vp.width); ec.height=Math.floor(vp.height);
+    const ctx=ec.getContext('2d');
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,ec.width,ec.height);
+    return page.render({canvasContext:ctx,viewport:vp}).promise.catch(()=>{});
+  }).catch(()=>{});
+}
+function playFromStart(){
+  if(!pagesData.length) return;
+  pi=0; manualStop=false; advToken++;
+  renderPage().then(()=>{
+    if(manualStop) return;
+    playing=true;
+    $('#bPlay').textContent='❚❚ 暫停';
+    hideStartPill();
+    enterFs();
+    if(mode==='custom') playCustomPage(); else pageUtter();
+  });
+}
+function beginCustomPlayback(){ playFromStart(); }
+function playCustomPage(){
+  if(!playing) return;
+  const raw=(customTexts[pi]||'').trim();
+  curSegStart=performance.now();
+  if(!raw){
+    buildTextSubtitle('');
+    curCustomPlan=null;
+    $('#progress').style.width='0%';
+    if(advanceTimer){clearTimeout(advanceTimer);}
+    advanceTimer=setTimeout(()=>{ if(playing&&!manualStop) advanceCustomPage(); }, 1000);
+    return;
+  }
+  const plan=makeSpeechPlan(raw);
+  curCustomPlan=plan;
+  buildTextSubtitle(raw);
+  const dur=Math.max(900, Math.round(estSecs(raw)*1000));
+  const u=new SpeechSynthesisUtterance(plan.speech);
+  u.lang='zh-TW';
+  const v=pickVoice(); if(v) u.voice=v;
+  u.rate=0.9; u.pitch=1; u.volume=0.7;
+  u.onstart=()=>{ subEl.classList.add('show'); };
+  const done=()=>{
+    if(!playing) return;
+    if(watchdog){clearTimeout(watchdog);watchdog=null;}
+    cancelSpeech();
+    subEl.classList.remove('show');
+    advanceCustomPage();
+  };
+  u.onend=done;
+  u.onerror=e=>{ console.warn('speech error',e.error); done(); };
+  curUtt=u;
+  const doSpeak=()=>{
+    subEl.classList.add('show');
+    speechSynthesis.speak(u);
+    if(watchdog){clearTimeout(watchdog);}
+    watchdog=setTimeout(()=>{ console.warn('speech watchdog: 跳下一頁'); done(); }, dur+8000);
+  };
+  if(performance.now()-lastCancel<120){ setTimeout(doSpeak,70); } else { doSpeak(); }
+}
+function advanceCustomPage(){
+  if(!playing||manualStop) return;
+  if(pi<pagesData.length-1){
+    pi++;
+    renderPage().then(()=>{ if(playing&&!manualStop) playCustomPage(); });
+  }else{
+    finishCustomPlayback();
+  }
+}
+function finishCustomPlayback(){
+  playing=false;
+  $('#bPlay').textContent='▶ 試播';
+  stopAll(true);
+  if(rec) stopRecording();
+  else toast('自訂語音播放完成');
+}
+
+/* ---------- 錄影輸出影片 ---------- */
+function pickMime(){
+  try{
+    if(MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) return 'video/webm;codecs=vp9,opus';
+    if(MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) return 'video/webm;codecs=vp8,opus';
+    if(MediaRecorder.isTypeSupported('video/webm')) return 'video/webm';
+  }catch(e){}
+  return '';
+}
+function showRec(on){
+  $('#bPlayRec').textContent=on?'⏹ 停止':'▶ 播放並錄影';
+}
+let recCanvas=null, recLoopRAF=0;
+function startRecording(){
+  if(!pagesData.length){ toast('請先選取 PDF'); return; }
+  if(rec) return;
+  if(playing) stopAll(false);
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){ toast('此瀏覽器不支援螢幕錄影，請改用 Chrome／Edge'); return; }
+  enterFs();
+  const out=new MediaStream();
+  // 影片：canvas 合成（頁面＋高亮＋字幕），不依賴 tab 畫面捕捉
+  // 音訊：僅系統音訊（不開麥克風）；speechSynthesis 需「分享整個螢幕＋分享系統音訊」才收得到
+  captureStreamAudio(out).then(async actx=>{
+    // 等 renderPage 依全螢幕尺寸完成後，再以正確尺寸建立 recCanvas 並 captureStream。
+    // 之後 recCanvas 尺寸不可再變（canvas captureStream 在 resize 後會停止產幀），
+    // 主 canvas 任何尺寸變化一律由 drawImage 縮放處理。
+    await renderPage().catch(()=>{});
+    recCanvas=document.createElement('canvas');
+    // 依主 canvas 長寬比放大：最短邊至少 1080（1080p 等級），避免直式頁面被壓扁成 16:9
+    const _cw=canvas.width||1280, _ch=canvas.height||720;
+    const _k=Math.max(1, 1080/Math.min(_cw,_ch));
+    recCanvas.width=Math.round(_cw*_k); recCanvas.height=Math.round(_ch*_k);
+    const vtrack=recCanvas.captureStream(30).getVideoTracks()[0];
+    if(vtrack) out.addTrack(vtrack);
+    const mime=pickMime();
+    const mr=new MediaRecorder(out, mime?{mimeType:mime, videoBitsPerSecond:8000000}:undefined);
+    const chunks=[];
+    mr.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+    const allTracks=out.getTracks();
+    allTracks.forEach(t=>{ t.onended=()=>{ if(rec) stopRecording(); if(playing) stopAll(false); }; });
+    rec={mr,chunks,tracks:allTracks,mime,actx};
+    mr.start(1000);
+    showRec(true);
+    toast('錄影中（'+recAudioNotes.join('；')+'）…播放至最後一頁後自動輸出');
+    startRecLoop();
+    startSilenceWatch(rec);
+    playFromStart();
+  })
+  .catch(err=>{
+    exitFs();
+    toast('錄影失敗：'+(err&&err.message||err));
+  });
+}
+let recAudioNotes=[]; let recAnalyser=null;
+async function captureStreamAudio(out){
+  recAudioNotes=[]; recAnalyser=null;
+  const AC=window.AudioContext||window.webkitAudioContext;
+  let sys=null;
+  // 只錄「電腦（系統）音訊」：不開麥克風，避免錄到外在／環境聲音。
+  // 注意：speechSynthesis 語音不會進入「此頁籤」音訊（Chromium bug 40753195），
+  // 必須在分享時選「整個螢幕／視窗」並勾選「分享系統音訊」才能錄到朗讀語音。
+  try{
+    const display=await navigator.mediaDevices.getDisplayMedia({
+      video:true, audio:true, systemAudio:'include'
+    });
+    display.getVideoTracks().forEach(t=>{ try{t.stop();}catch(e){} });
+    sys=display.getAudioTracks();
+  }catch(e){
+    if(e&&(e.name==='NotAllowedError'||e.name==='AbortError')){ recAudioNotes.push('未允許分享，已取消'); return null; }
+    throw e;
+  }
+  if(!sys||!sys.length){
+    recAudioNotes.push('未取得系統音訊（請於分享時選「整個螢幕」並勾選「分享系統音訊」），暫為無聲');
+    return null;
+  }
+  try{
+    const actx=new AC();
+    const dest=actx.createMediaStreamDestination();
+    // 放大音量（解決「錄到的聲音太小」）＋ 動態壓縮避免爆音
+    const gain=actx.createGain(); gain.gain.value=1.9;
+    const comp=actx.createDynamicsCompressor();
+    comp.threshold.value=-22; comp.knee.value=24;
+    comp.ratio.value=10; comp.attack.value=0.004; comp.release.value=0.18;
+    // 靜音偵測：分析朗讀語音是否有實際音量
+    const an=actx.createAnalyser(); an.fftSize=512; recAnalyser=an;
+    actx.createMediaStreamSource(new MediaStream(sys)).connect(comp);
+    comp.connect(gain); gain.connect(dest); gain.connect(an);
+    await actx.resume();
+    const audioTrack=dest.stream.getAudioTracks()[0];
+    if(audioTrack) out.addTrack(audioTrack);
+    recAudioNotes.push('僅錄電腦音訊（已放大＋壓縮）');
+    return actx;
+  }catch(e){ console.warn('sys audio err',e); recAudioNotes.push('音訊處理失敗'); return null; }
+}
+// 靜音看門狗：開錄後先聽約 4 秒，若完全沒音量，代表系統音訊沒被正確捕捉（例如分享頁籤而非整個螢幕／未勾選分享系統音訊）。
+// 僅在開頭「提示一次、然後停止檢查」，避免錄影途中反覆彈出干擾；也不會中斷錄影。
+function startSilenceWatch(rec){
+  const an=recAnalyser; if(!an) return;
+  const SAMPLE=an.fftSize?an.frequencyBinCount:256;
+  const buf=new Uint8Array(SAMPLE);
+  let heard=false; let checks=0; let warned=false;
+  const timer=setInterval(()=>{
+    an.getByteTimeDomainData(buf);
+    let peak=0;
+    for(let i=0;i<SAMPLE;i++){
+      const v=Math.abs(buf[i]-128);
+      if(v>peak) peak=v;
+    }
+    if(peak>2) heard=true; // 128 = 靜音中心，偏離 2 以上視為有聲
+    checks++;
+    if(checks>=8){ // ~4 秒：聽音視窗結束
+      clearInterval(timer);
+      if(!heard&&!warned){
+        warned=true;
+        toast('⚠️ 偵測不到系統音訊：語音可能沒被錄到，可停止後重新錄製並在分享時選「整個螢幕」且勾選「分享系統音訊」');
+      }
+    }
+  },500);
+  rec._silenceTimer=timer;
+}
+function startRecLoop(){
+  stopRecLoop();
+  const rc=recCanvas, pc=canvas;
+  const draw=()=>{
+    if(!rec||!rc) return;
+    // 重要：recCanvas 尺寸自 captureStream 後不可變更，否則 video track 停止產幀（黑畫面）。
+    // 主 canvas 縮放、翻頁、縮放倍率皆以 drawImage 縮放處理，不 resize recCanvas。
+    const ctx=rc.getContext('2d');
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,rc.width,rc.height);
+    ctx.drawImage(pc,0,0,rc.width,rc.height);
+    const p=pagesData[pi];
+    if(p&&displayScale&&p.baseW){
+      const s=rc.width/(p.baseW*displayScale);
+      ctx.save();
+      ctx.globalAlpha=.55;
+      ctx.fillStyle='#ffd54a';
+      hls.forEach(h=>{
+        if(!h.el.classList.contains('on')) return;
+        const x=parseFloat(h.el.style.left)||0, y=parseFloat(h.el.style.top)||0;
+        const w=parseFloat(h.el.style.width)||0, hh=parseFloat(h.el.style.height)||0;
+        ctx.fillRect(x*s, y*s, w*s, hh*s);
+      });
+      ctx.restore();
+    }
+    const txt=subShownText;
+    if(txt){
+      ctx.save();
+      // 字幕單行：過長時縮小字級以完整呈現於底框內（不換行、不截斷）
+      let fs=36;
+      const boxW=rc.width-40;
+      ctx.font='700 '+fs+'px "Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif';
+      const tw=ctx.measureText(txt).width;
+      if(tw>boxW-56){ fs=Math.max(18, Math.floor(fs*(boxW-56)/tw)); ctx.font='700 '+fs+'px "Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif'; }
+      const boxH=Math.max(fs+34, 58);
+      const boxX=rc.width/2, boxY=rc.height-40-boxH;
+      ctx.fillStyle='rgba(8,12,22,.95)';
+      roundRect(ctx, boxX-boxW/2, boxY, boxW, boxH, 10);
+      ctx.fill();
+      ctx.fillStyle='#ffd54a';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(txt, boxX, boxY+boxH/2+1);
+      ctx.restore();
+    }
+    recLoopRAF=requestAnimationFrame(draw);
+  };
+  recLoopRAF=requestAnimationFrame(draw);
+}
+function stopRecLoop(){ if(recLoopRAF){ cancelAnimationFrame(recLoopRAF); recLoopRAF=0; } }
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function stopRecording(){
+  if(!rec) return;
+  const r=rec; rec=null;
+  if(r._silenceTimer){ clearInterval(r._silenceTimer); r._silenceTimer=null; }
+  recAnalyser=null;
+  stopRecLoop();
+  showRec(false);
+  r.mr.onstop=()=>{
+    const blob=new Blob(r.chunks,{type:r.mime||'video/webm'});
+    if(blob&&blob.size){
+      toast('錄影完成，正在修復播放相容性（補齊時間軸索引）…');
+      remuxWebM(blob).then(fixed=>{
+        if(fixed&&fixed.size){
+          downloadBlob(fixed,'pdf播放錄影(可快轉).webm');
+          toast('已輸出可拖動時間軸的影片（可快轉）');
+        }else{
+          downloadBlob(blob,'pdf播放錄影.webm');
+          toast('原始錄影已輸出（修復失敗，可直接使用）');
+        }
+      }).catch(err=>{
+        console.warn('remux failed, raw webm kept',err);
+        downloadBlob(blob,'pdf播放錄影.webm');
+        toast('原始錄影已輸出（此瀏覽器無法修復快轉，請改用 Chrome／Edge）');
+      });
+    }else{
+      toast('錄影內容為空');
+    }
+  };
+  try{ if(r.mr.state!=='inactive') r.mr.stop(); }catch(e){}
+  r.tracks.forEach(t=>{ try{t.stop();}catch(e){} });
+  if(r.actx){ try{r.actx.close();}catch(e){} }
+  exitFs();
+}
+
+/* ---------- WebM 播放相容性修復（ffmpeg.wasm 補 Cues） ---------- */
+// MediaRecorder 產出的 WebM 常缺 Cues（index），導致部分播放器無法拖動時間軸／快轉。
+// 錄影結束後用 ffmpeg.wasm（single-thread，免 SharedArrayBuffer，GitHub Pages 可用）remux 補齊。
+// 注意：single-thread core（core-st）執行完 run() 後即退出、無法重複使用，故每次 remux 都重建核心。
+let _ffmpegScriptPromise=null;
+function loadFFmpegScript(){
+  if(_ffmpegScriptPromise) return _ffmpegScriptPromise;
+  _ffmpegScriptPromise=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
+    s.onload=res; s.onerror=()=>rej(new Error('載入 ffmpeg.wasm 失敗'));
+    document.head.appendChild(s);
+  });
+  return _ffmpegScriptPromise;
+}
+async function remuxWebM(blob, attempt){
+  // attempt: 第幾次嘗試（1 起算）；失敗時重建核心重試，長影片較容易觸發記憶體錯誤
+  const _a=attempt||1;
+  await loadFFmpegScript();
+  const ff=FFmpeg.createFFmpeg({
+    log:false,
+    mainName:'main',
+    corePath:'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+  });
+  await ff.load();
+  const buf=new Uint8Array(await blob.arrayBuffer());
+  ff.FS('writeFile','rec_in.webm',buf);
+  // core-st 0.11.1 為 2020 版 FFmpeg，無 -cues_to_front；純 -c copy 重寫封包即會重新產生 Cues
+  await ff.run('-i','rec_in.webm','-c','copy','rec_out.webm');
+  const data=ff.FS('readFile','rec_out.webm');
+  try{ ff.FS('unlink','rec_in.webm'); }catch(e){}
+  try{ ff.FS('unlink','rec_out.webm'); }catch(e){}
+  const out=new Blob([data],{type:blob.type||'video/webm'});
+  if(out.size){
+    return out;
+  }
+  // 空輸出視為失敗，重試一次
+  if(_a<2){ toast('快轉索引重建未完成，重試中…'); return remuxWebM(blob,_a+1); }
+  throw new Error('remux empty output');
+}
+function downloadBlob(blob, name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),15000);
+}
+
+/* ---------- 全螢幕 ---------- */
+function enterFs(){
+  if(document.fullscreenElement||!document.documentElement.requestFullscreen) return;
+  document.documentElement.requestFullscreen().catch(()=>{});
+}
+function exitFs(){
+  if(document.fullscreenElement&&document.exitFullscreen){ document.exitFullscreen().catch(()=>{}); }
+}
+
+/* ---------- 控制 ---------- */
+$('#bPlay').onclick=togglePlay;
+$('#bPrev').onclick=()=>{stopAll(false);pi=Math.max(0,pi-1);renderPage();};
+$('#bNext').onclick=()=>{stopAll(false);pi=Math.min(pagesData.length-1,pi+1);renderPage();};
+$('#bReplay').onclick=()=>{advToken++;segIdx=0;startPlayback();};
+$('#bAuto').onclick=e=>{autoAdvance=!autoAdvance;e.target.classList.toggle('on',autoAdvance);e.target.textContent=autoAdvance?'自動翻頁':'手動翻頁';};
+$('#bFull').onclick=()=>{if(document.fullscreenElement){document.exitFullscreen();}else{document.documentElement.requestFullscreen();}};
+$('#bFsExit').onclick=()=>{if(document.fullscreenElement) document.exitFullscreen();};
+$('#bFullExit').onclick=()=>{if(document.fullscreenElement) document.exitFullscreen();};
+$('#bZoomIn').onclick=()=>{zoom=Math.min(3,+(zoom+0.1).toFixed(2));renderPage();};
+$('#bZoomOut').onclick=()=>{zoom=Math.max(0.5,+(zoom-0.1).toFixed(2));renderPage();};
+$('#bZoomReset').onclick=()=>{zoom=1;renderPage();};
+$('#bHome').onclick=()=>{ if(rec) stopRecording(); showLanding(); };
+$('#bEdit').onclick=openEditor;
+$('#bPlayRec').onclick=()=>{ if(rec) stopRecording(); else startRecording(); };
+$('#landHelp').onclick=()=>{ $('#helpmodal').classList.add('show'); };
+$('#helpClose').onclick=()=>{ $('#helpmodal').classList.remove('show'); };
+$('#helpAiPrompt').onclick=e=>{ e.preventDefault(); $('#aipromptmodal').classList.add('show'); };
+$('#aipromptClose').onclick=()=>{ $('#aipromptmodal').classList.remove('show'); };
+document.querySelectorAll('.modecard').forEach(c=>{ c.onclick=()=>enterMode(c.getAttribute('data-mode')); });
+$('#edPrevBtn').onclick=()=>{ customTexts[edPi]=$('#edText').value; edPi=Math.max(0,edPi-1); syncEditor(); };
+$('#edNextBtn').onclick=()=>{ customTexts[edPi]=$('#edText').value; edPi=Math.min(pagesData.length-1,edPi+1); syncEditor(); };
+$('#edText').oninput=updateEst;
+$('#edClose').onclick=closeEditor;
+$('#edPlay').onclick=()=>{
+  customTexts[edPi]=$('#edText').value;
+  closeEditor();
+  enterCustomMode();
+  beginCustomPlayback();
+};
+$('#edRecord').onclick=()=>{
+  customTexts[edPi]=$('#edText').value;
+  closeEditor();
+  enterCustomMode();
+  startRecording();
+};
+document.addEventListener('fullscreenchange',()=>{
+  const fs=!!document.fullscreenElement;
+  document.body.classList.toggle('fs',fs);
+  $('#topbar').style.display=fs?'none':(screen==='landing'?'none':'');
+  $('#dots').style.display=fs?'none':(screen==='landing'?'none':'');
+  $('#zoomctl').classList.toggle('show',!fs&&screen==='mode');
+  $('.hint').style.display=fs?'none':(screen==='landing'?'none':'');
+  $('#bFsExit').classList.toggle('show',fs);
+  if(fs){ hideStartPill(); closeEditor(); }
+  if(pdfDoc) renderPage();
+});
+$('#startpill').onclick=startPlayback;
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    if($('#aipromptmodal').classList.contains('show')){ $('#aipromptmodal').classList.remove('show'); return; }
+    if($('#helpmodal').classList.contains('show')){ $('#helpmodal').classList.remove('show'); return; }
+    if($('#editor').classList.contains('show')){ closeEditor(); return; }
+    if(screen==='landing') return;
+    if(rec) stopRecording();
+    stopAll(false);
+    return;
+  }
+  if(screen!=='mode') return;
+  if(e.key===' '||e.key==='Enter'){e.preventDefault();togglePlay();}
+  else if(e.key==='ArrowRight'){$('#bNext').click();}
+  else if(e.key==='ArrowLeft'){$('#bPrev').click();}
+  else if(e.key==='f'||e.key==='F'){$('#bFull').click();}
+  else if(e.key==='r'||e.key==='R'){$('#bReplay').click();}
+});
+function toast(m){const t=$('#toast');t.textContent=m;t.style.opacity=1;clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.opacity=0,3200);}
+function showBusy(on,txt){$('#busy').classList.toggle('show',on);if(txt)$('#busyText').textContent=txt;}
+
+function pickFile(){
+  $('#file').click();
+}
+$('#landFile').onclick=pickFile;
+$('#landPick').onclick=pickFile;
+$('#file').onchange=e=>{
+  const f=e.target.files[0];
+  e.target.value='';
+  if(f) f.arrayBuffer().then(buf=>loadPdf(new Uint8Array(buf))).catch(err=>toast('讀取檔案失敗：'+err.message));
+};
+// 拖曳
+let dragDepth=0;
+window.addEventListener('dragenter',e=>{e.preventDefault();dragDepth++;const lf=$('#landFile');if(lf)lf.style.borderColor='#ffd54a';});
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('dragleave',e=>{e.preventDefault();dragDepth--;});
+window.addEventListener('drop',e=>{
+  e.preventDefault();dragDepth=0;
+  const f=e.dataTransfer.files[0];
+  if(f&&f.name.toLowerCase().endsWith('.pdf')){
+    f.arrayBuffer().then(buf=>loadPdf(new Uint8Array(buf))).catch(err=>toast('讀取檔案失敗：'+err.message));
+  }else{
+    toast('請拖入 PDF 檔案');
+  }
+});
+window.addEventListener('resize',()=>{ if(pdfDoc) layoutHL(); });
+
+showLanding();
+</script>
+</body>
+</html>

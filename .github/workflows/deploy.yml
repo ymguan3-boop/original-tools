@@ -1,0 +1,76 @@
+name: Deploy original-tools to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: qr-platform/client/package-lock.json
+
+      - name: Install qr-platform deps
+        working-directory: qr-platform/client
+        run: npm ci
+
+      - name: Build qr-platform
+        working-directory: qr-platform/client
+        run: npm run build
+
+      - name: Assemble deploy site
+        run: |
+          rm -rf deploy
+          mkdir -p deploy/qr-platform
+          mkdir -p deploy/pdf-voice-video
+
+          # landing page
+          cp index.html deploy/index.html
+          cp index.html deploy/404.html
+
+          # qr-platform built assets
+          cp -r qr-platform/client/dist/* deploy/qr-platform/
+          cp deploy/qr-platform/index.html deploy/qr-platform/404.html || true
+
+          # pdf-voice-video static (relative paths work under subpath)
+          cp -r pdf-voice-video/* deploy/pdf-voice-video/
+          # ensure .nojekyll is at deploy root and subdirs for Pages
+          touch deploy/.nojekyll
+          touch deploy/qr-platform/.nojekyll
+          touch deploy/pdf-voice-video/.nojekyll
+
+          echo "=== deploy tree ==="
+          ls -R deploy | head -n 100
+          du -sh deploy/*
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: deploy
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

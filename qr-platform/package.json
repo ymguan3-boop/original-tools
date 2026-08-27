@@ -1,0 +1,57 @@
+{
+  "name": "qr-platform-desktop",
+  "version": "1.0.0",
+  "description": "QR Code 產生與管理平台",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "build:client": "cd client && npx vite build",
+    "build:electron": "electron-builder --win portable",
+    "build": "npm run build:client && npm run build:electron",
+    "dev": "electron ."
+  },
+  "build": {
+    "appId": "com.qr-platform.app",
+    "productName": "QR Code 管理平台",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "client/dist/**/*",
+      "uploads/**/*",
+      "!client/node_modules/**/*",
+      "!client/src/**/*"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "extraResources": [
+      {
+        "from": "server",
+        "to": "server",
+        "filter": [
+          "dist/**/*",
+          "node_modules/sql.js/**/*",
+          "package.json"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "QR-Platform-${version}-portable-${arch}.exe"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "server/node_modules/sql.js/dist/sql-wasm.wasm"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "jimp": "^1.6.1"
+  }
+}

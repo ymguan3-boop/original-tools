@@ -1,0 +1,15 @@
+node_modules/
+dist/
+deploy/
+client/dist/
+client/node_modules/
+server/node_modules/
+qr-platform/client/dist/
+qr-platform/server/dist/
+qr-platform/node_modules/
+release/
+uploads/
+data/
+*.log
+.DS_Store
+Thumbs.db
