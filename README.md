@@ -2,6 +2,8 @@
 
 > 收錄個人原創純前端工具，免安裝、免後端，開啟即用。透過 GitHub Pages 以子路徑統一部署。
 
+**創作者**：官毅明
+
 **線上總覽**： https://ymguan3-boop.github.io/original-tools/
 
 ---
@@ -58,6 +60,10 @@ open pdf-voice-video/index.html
 
 - 原倉庫（`qr-platform`、`pdf-voice-video`）仍獨立維護；本倉庫為彙整發行用。更新時可重新執行複製或以 `git subtree` 同步。
 - 新增工具：複製至子目錄，並在 `index.html` 與 `README.md` 加入卡片，最後同步 `deploy.yml`。
+
+## 創作者
+
+官毅明
 
 ## 授權
 
