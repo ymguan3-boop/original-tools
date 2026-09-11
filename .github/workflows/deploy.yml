@@ -39,6 +39,7 @@ jobs:
           rm -rf deploy
           mkdir -p deploy/qr-platform
           mkdir -p deploy/pdf-voice-video
+          mkdir -p deploy/mobile-remote-assist
 
           # landing page
           cp index.html deploy/index.html
@@ -50,10 +51,13 @@ jobs:
 
           # pdf-voice-video static (relative paths work under subpath)
           cp -r pdf-voice-video/* deploy/pdf-voice-video/
+          # mobile remote assist frontend; signaling and token issuance remain server-side
+          cp -r mobile-remote-assist/* deploy/mobile-remote-assist/
           # ensure .nojekyll is at deploy root and subdirs for Pages
           touch deploy/.nojekyll
           touch deploy/qr-platform/.nojekyll
           touch deploy/pdf-voice-video/.nojekyll
+          touch deploy/mobile-remote-assist/.nojekyll
 
           echo "=== deploy tree ==="
           ls -R deploy | head -n 100

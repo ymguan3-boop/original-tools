@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>手機遠端協助</title><link rel="stylesheet" href="./styles.css" /></head>
+  <body data-role="mobile">
+    <main class="phone-shell">
+      <section class="topbar"><div><p class="eyebrow">Mobile Support</p><h1>手機遠端協助</h1><p class="creator">製作人 官毅明</p></div><button id="show-help" class="ghost help-button" type="button">使用說明</button></section>
+      <section class="panel mobile-card"><div class="pair-code" id="pair-code">----</div><p class="hint">請將這組代碼提供給協助人員</p><div id="mobile-connection-state" class="mobile-connection-state" data-state="waiting">等待主控台加入</div>
+        <div class="share-options">
+          <button id="start-camera"><strong>開始分享鏡頭</strong><span>讓協助人員看到手機鏡頭拍到的實體畫面</span></button>
+          <button id="toggle-microphone" class="microphone-button" type="button">啟動麥克風</button>
+          <button id="resume-media" type="button" hidden>播放聲音</button>
+        </div>
+        <p id="network-status" class="network-status" role="status"></p>
+        <div class="mobile-preview"><video id="local-video" autoplay muted playsinline></video><audio id="remote-audio" autoplay></audio><canvas id="annotation-canvas" aria-label="協助人員即時標記"></canvas><div id="annotation-hint" class="annotation-hint" hidden>協助人員正在畫面上標記</div></div>
+        <dl class="status-list"><div><dt>目前狀態</dt><dd id="session-status">建立連線中</dd></div><div><dt>分享來源</dt><dd id="stream-source">尚未分享</dd></div></dl></section>
+      <section class="panel chat-panel mobile-chat"><div class="messages" id="messages" aria-live="polite"></div><form id="message-form" class="message-form"><input id="message-input" placeholder="輸入訊息" autocomplete="off" /><button>傳送</button></form></section>
+    </main>
+    <dialog id="help-dialog"><div class="help-content"><h2>使用說明</h2><ol><li>將顯示的 4 位協助代碼提供給一位協助人員。</li><li>按開始分享鏡頭並允許鏡頭與麥克風。</li><li>工作階段最長 30 分鐘；5 分鐘未活動或主控端停止連線即結束。</li><li>請勿向陌生人提供代碼或展示敏感資料。</li></ol><button id="close-help" type="button">關閉</button></div></dialog>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

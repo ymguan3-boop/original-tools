@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="官毅明製作的手機遠端協助工作台，提供鏡頭、語音、文字與即時標記。" />
+    <title>手機遠端協助</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      .entry-shell { width: min(720px, calc(100% - 32px)); margin: 0 auto; padding: 48px 0; }
+      .entry-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
+      .entry-link { display: grid; gap: 8px; min-height: 116px; padding: 20px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #0f172a; text-decoration: none; }
+      .entry-link:hover { border-color: #0f766e; box-shadow: 0 8px 24px rgb(15 23 42 / 10%); }
+      .entry-link strong { font-size: 20px; }
+      .entry-link span, .entry-note { color: #475569; line-height: 1.6; }
+      @media (max-width: 560px) { .entry-actions { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main class="entry-shell">
+      <p class="eyebrow">Remote Assist</p>
+      <h1>手機遠端協助</h1>
+      <p class="creator">製作人 官毅明</p>
+      <p class="entry-note">請依使用角色進入。媒體透過 LiveKit Cloud 免費方案加密傳送，配對與金鑰由伺服器安全處理。</p>
+      <section class="entry-actions" aria-label="選擇使用端">
+        <a class="entry-link" href="./helper.html"><strong>電腦主控台</strong><span>輸入手機端顯示的 4 位數代碼，觀看鏡頭並提供即時協助。</span></a>
+        <a class="entry-link" href="./mobile.html"><strong>手機端</strong><span>建立協助代碼，分享手機鏡頭與語音。</span></a>
+      </section>
+    </main>
+  </body>
+</html>
