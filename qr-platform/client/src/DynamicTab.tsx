@@ -2,12 +2,25 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import QRCode from 'qrcode';
 import {
   QrCode, Download, Copy, Check, Plus, ExternalLink,
-  Repeat, RotateCcw, FileDown, Link2,
+  Repeat, RotateCcw, FileDown, Link2, Upload, KeyRound,
 } from 'lucide-react';
 import {
   ActivityMap, fixedLinkFor, testLinkFor, loadOverrides, saveOverrides,
   loadActivities, buildLinksJson, todayStr, isValidSlug, isValidHttpUrl,
 } from './dynamicQr';
+
+const GH_REPO = 'ymguan3-boop/original-tools';
+const GH_PATH = 'qr-platform/client/public/links.json';
+const GH_BRANCH = 'main';
+const GH_FOLDER_URL = `https://github.com/${GH_REPO}/tree/${GH_BRANCH}/qr-platform/client/public`;
+const GH_TOKEN_URL = 'https://github.com/settings/tokens?type=beta';
+
+function utf8ToBase64(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let bin = '';
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin);
+}
 
 export default function DynamicTab() {
   const [activities, setActivities] = useState<ActivityMap | null>(null);
@@ -20,6 +33,10 @@ export default function DynamicTab() {
   const [newTarget, setNewTarget] = useState('');
   const [msg, setMsg] = useState('');
   const [copied, setCopied] = useState(false);
+  const [pat, setPat] = useState(() => window.localStorage.getItem('qr-gh-pat') || '');
+  const [showPat, setShowPat] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [pubMsg, setPubMsg] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dataUrl, setDataUrl] = useState('');
 
@@ -95,7 +112,7 @@ export default function DynamicTab() {
       ...activities,
       [selected]: { ...activities[selected], target: editTarget.trim(), updatedAt: todayStr() },
     });
-    setMsg('存好了！你自己現在掃就會連到新網頁。要讓別人的手機也連到新網頁，請繼續做最下面的「第 4 步」。');
+    setMsg('存好了！在這台電腦按上面的「試試看」會連到新網頁。但手機還掃不到，要讓手機也換，請做最下面的「第 4 步」。');
   };
 
   const handleRevert = () => {
@@ -123,13 +140,19 @@ export default function DynamicTab() {
     setMsg(`新增好了！記得做最下面的「第 4 步」，大家才掃得到。`);
   };
 
-  const handleDownloadJson = () => {
-    if (!activities) return;
+  const buildMerged = (): ActivityMap | null => {
+    if (!activities) return null;
     const merged: ActivityMap = { ...activities };
     for (const [k, v] of Object.entries(overrides)) {
       if (merged[k]) merged[k] = { ...merged[k], target: v, updatedAt: todayStr() };
       else merged[k] = { label: k, target: v, updatedAt: todayStr() };
     }
+    return merged;
+  };
+
+  const handleDownloadJson = () => {
+    const merged = buildMerged();
+    if (!merged) return;
     const blob = new Blob([buildLinksJson(merged)], { type: 'application/json' });
     const href = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -137,6 +160,51 @@ export default function DynamicTab() {
     a.download = 'links.json';
     a.click();
     URL.revokeObjectURL(href);
+  };
+
+  const handlePublish = async () => {
+    const merged = buildMerged();
+    if (!merged) return;
+    const token = pat.trim();
+    if (!token) { setPubMsg('請先貼上鑰匙（Token），才能公開上線。'); return; }
+    setPublishing(true);
+    setPubMsg('上傳中，請稍等…');
+    try {
+      const apiUrl = `https://api.github.com/repos/${GH_REPO}/contents/${GH_PATH}`;
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      };
+      let sha: string | undefined;
+      const getRes = await fetch(`${apiUrl}?ref=${GH_BRANCH}`, { headers });
+      if (getRes.status === 401) throw new Error('鑰匙不正確或過期了，請重新產生一把再貼上。');
+      if (getRes.status === 403) throw new Error('鑰匙沒有權限，請確認產生時有勾選 Contents 的讀寫。');
+      if (getRes.ok) {
+        const info = await getRes.json();
+        sha = info.sha;
+      } else if (getRes.status !== 404) {
+        throw new Error(`讀取 GitHub 失敗（${getRes.status}），請檢查網路後再試。`);
+      }
+      const putRes = await fetch(apiUrl, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          message: `更新活動連結（${todayStr()}）`,
+          content: utf8ToBase64(buildLinksJson(merged)),
+          branch: GH_BRANCH,
+          ...(sha ? { sha } : {}),
+        }),
+      });
+      if (putRes.status === 401) throw new Error('鑰匙不正確或過期了，請重新產生一把再貼上。');
+      if (!putRes.ok) throw new Error(`上傳失敗（${putRes.status}），請稍後再試。`);
+      window.localStorage.setItem('qr-gh-pat', token);
+      setPubMsg('上傳成功！網站約 1 分鐘後更新好，舊 QR 就會連到新網頁，不用重印。');
+    } catch (e: any) {
+      setPubMsg(e?.message || '上傳失敗，請檢查網路後再試。');
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const handleDownloadPNG = () => {
@@ -186,7 +254,7 @@ export default function DynamicTab() {
             <li><span className="font-semibold">選一張 QR</span>：下面選一張，沒有就加一張新的</li>
             <li><span className="font-semibold">貼上網頁</span>：把要給大家看的網址貼上，按「儲存」</li>
             <li><span className="font-semibold">印出來</span>：把右邊的 QR 下載、印出來貼出去</li>
-            <li><span className="font-semibold">以後換網址</span>：回來改一改，照最下面的第 4 步上傳，舊圖繼續用、不用重印</li>
+            <li><span className="font-semibold">以後換網址</span>：回來改一改，按最下面的「公開上線」，舊圖繼續用、不用重印</li>
           </ol>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
@@ -315,15 +383,49 @@ export default function DynamicTab() {
           <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-900">
             <FileDown className="w-4 h-4" /> 第 4 步：讓大家的手機都連到新網址
           </h3>
-          <ol className="mt-2 text-xs leading-relaxed text-amber-900 list-decimal list-inside space-y-1">
-            <li>按下方按鈕，會存一個小檔案（links.json）到你的電腦</li>
-            <li>到 GitHub 的 qr-platform/client/public/ 資料夾，把舊檔換成這個新檔（直接在 GitHub 網頁上傳覆蓋就可以），然後等大約 1 分鐘讓網站更新</li>
-            <li>好了！舊 QR 不用重印，掃了就會到新網頁</li>
-          </ol>
-          <button onClick={handleDownloadJson}
-            className="mt-3 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 inline-flex items-center gap-1.5">
-            <Download className="w-4 h-4" /> 下載設定檔（links.json）
-          </button>
+          <p className="mt-2 text-xs leading-relaxed text-amber-900">
+            為什麼手機掃了還沒換？因為第 2 步的「儲存」只存在你這台電腦。
+            要讓所有手機都換，請按下面的「公開上線」，把新設定送到網站，等約 1 分鐘就好，舊 QR 不用重印。
+          </p>
+          <div className="mt-3 bg-white/70 rounded-xl border border-amber-200 p-3">
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-amber-900">
+              <KeyRound className="w-3.5 h-3.5" /> 上傳用的鑰匙（第一次用才需要，以後不用再貼）
+            </label>
+            <div className="mt-2 flex gap-2">
+              <input
+                type={showPat ? 'text' : 'password'}
+                value={pat}
+                onChange={(e) => setPat(e.target.value)}
+                placeholder="貼上 GitHub Token，例如 github_pat_…"
+                className="flex-1 px-3 py-2.5 rounded-xl border border-amber-200 text-xs font-mono bg-white outline-none focus:border-amber-400"
+              />
+              <button
+                onClick={() => setShowPat(!showPat)}
+                className="px-3 rounded-xl border border-amber-200 bg-white text-xs text-amber-900"
+              >
+                {showPat ? '隱藏' : '顯示'}
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-amber-800">
+              還沒有鑰匙？<a href={GH_TOKEN_URL} target="_blank" rel="noreferrer" className="underline font-semibold">按這裡去 GitHub 產生一把</a>：
+              選 Fine-grained tokens → Generate new token → 下面 Repository access 選 Only select repositories 並勾 original-tools →
+              Permissions 找到 Contents 選 Read and write → 按 Generate，複製那串字回來貼上。
+            </p>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button onClick={handlePublish} disabled={publishing}
+              className="px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 inline-flex items-center gap-1.5">
+              <Upload className="w-4 h-4" /> {publishing ? '上傳中…' : '公開上線'}
+            </button>
+            <button onClick={handleDownloadJson}
+              className="px-4 py-2.5 rounded-xl bg-white border border-amber-300 text-amber-900 text-sm font-medium hover:bg-amber-100/50 inline-flex items-center gap-1.5">
+              <Download className="w-4 h-4" /> 先存一份設定檔起來
+            </button>
+          </div>
+          {pubMsg && <p className="mt-2 text-xs leading-relaxed text-amber-900">{pubMsg}</p>}
+          <p className="mt-2 text-[11px] text-amber-800">
+            想自己動手也可以：<a href={GH_FOLDER_URL} target="_blank" rel="noreferrer" className="underline">直接打開 GitHub 資料夾上傳覆蓋 <ExternalLink className="w-3 h-3 inline" /></a>
+          </p>
         </div>
       </div>
 
