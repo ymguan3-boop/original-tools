@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import QRCode from 'qrcode';
 import {
   QrCode, Download, Copy, Check, ExternalLink,
@@ -67,8 +67,8 @@ export default function DynamicTab() {
   const [publishing, setPublishing] = useState(false);
   const [pubMsg, setPubMsg] = useState('');
   const [checking, setChecking] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dataUrl, setDataUrl] = useState('');
+  const [qrError, setQrError] = useState('');
 
   const fixedLink = fixedLinkFor(FIXED_CODE);
   const publishedTarget = activities?.[FIXED_CODE]?.target || '';
@@ -87,27 +87,22 @@ export default function DynamicTab() {
       .catch((e: any) => setLoadError(e?.message || '載入失敗'));
   }, []);
 
-  // QR 圖只跟固定地址有關，畫一次就不會再變
-  const renderQR = useCallback(async () => {
-    if (!canvasRef.current) return;
+  // QR 圖只跟固定地址有關；用圖片方式產生，失敗會顯示原因
+  const generateQR = useCallback(async () => {
+    setQrError('');
     try {
-      await QRCode.toCanvas(canvasRef.current, fixedLink, {
-        width: 300, margin: 2,
-        color: { dark: '#0f172a', light: '#ffffff' },
-        errorCorrectionLevel: 'M',
-      });
       const du = await QRCode.toDataURL(fixedLink, {
         width: 1024, margin: 2,
         color: { dark: '#0f172a', light: '#ffffff' },
         errorCorrectionLevel: 'M',
       });
       setDataUrl(du);
-    } catch {
-      /* 忽略 */
+    } catch (e: any) {
+      setQrError(e?.message || 'QR 產生失敗');
     }
   }, [fixedLink]);
 
-  useEffect(() => { renderQR(); }, [renderQR]);
+  useEffect(() => { generateQR(); }, [generateQR]);
 
   const copyText = async (text: string) => {
     try {
@@ -274,10 +269,24 @@ export default function DynamicTab() {
           <StepBadge n="1" /> <Printer className="w-4 h-4 text-indigo-600" /> 把這張 QR 印出來
         </h3>
         <p className="mt-1 text-xs text-slate-500">這張圖永遠不變，先印沒關係，儘管貼出去。</p>
-        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 flex items-center justify-center">
-          <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-200">
-            <canvas ref={canvasRef} className="block max-w-full h-auto" style={{ width: 260, height: 260 }} />
-          </div>
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 flex items-center justify-center min-h-[300px]">
+          {dataUrl ? (
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-200">
+              <img src={dataUrl} alt="活動 QR Code" className="block max-w-full h-auto" style={{ width: 260, height: 260 }} />
+            </div>
+          ) : qrError ? (
+            <div className="text-center max-w-sm">
+              <p className="text-sm text-red-600">QR 產生失敗：{qrError}</p>
+              <button
+                onClick={generateQR}
+                className="mt-3 px-4 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium hover:bg-slate-50"
+              >
+                重新產生
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">QR 產生中…</p>
+          )}
         </div>
         <div className="mt-3 flex gap-2">
           <input
@@ -294,12 +303,12 @@ export default function DynamicTab() {
           </button>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button onClick={handleDownloadPNG}
-            className="inline-flex items-center justify-center gap-1.5 py-3 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 shadow-sm">
+          <button onClick={handleDownloadPNG} disabled={!dataUrl}
+            className="inline-flex items-center justify-center gap-1.5 py-3 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm">
             <Download className="w-4 h-4" /> 下載圖片拿去印
           </button>
-          <button onClick={handleDownloadSVG}
-            className="inline-flex items-center justify-center gap-1.5 py-3 rounded-xl bg-white border border-slate-200 text-slate-800 text-sm font-semibold hover:bg-slate-50">
+          <button onClick={handleDownloadSVG} disabled={!dataUrl}
+            className="inline-flex items-center justify-center gap-1.5 py-3 rounded-xl bg-white border border-slate-200 text-slate-800 text-sm font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">
             <Download className="w-4 h-4" /> 下載向量檔
           </button>
         </div>
