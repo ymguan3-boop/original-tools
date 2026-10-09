@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import QRCode from 'qrcode';
 import {
   QrCode, Download, Copy, Check, ExternalLink,
@@ -19,6 +19,11 @@ const GH_PATH = 'qr-platform/client/public/links.json';
 const GH_BRANCH = 'main';
 const GH_FOLDER_URL = `https://github.com/${GH_REPO}/tree/${GH_BRANCH}/qr-platform/client/public`;
 const GH_TOKEN_URL = 'https://github.com/settings/tokens?type=beta';
+
+/** 自動確認：每幾秒檢查一次，最多檢查幾次 */
+const CHECK_EVERY_SEC = 15;
+const FIRST_CHECK_SEC = 5;
+const MAX_CHECKS = 20;
 
 function utf8ToBase64(s: string): string {
   const bytes = new TextEncoder().encode(s);
@@ -67,8 +72,12 @@ export default function DynamicTab() {
   const [publishing, setPublishing] = useState(false);
   const [pubMsg, setPubMsg] = useState('');
   const [lastUploaded, setLastUploaded] = useState('');
+  const lastUploadedRef = useRef('');
   const [checkingLive, setCheckingLive] = useState(false);
   const [liveMsg, setLiveMsg] = useState('');
+  const [autoChecking, setAutoChecking] = useState(false);
+  const [checkCount, setCheckCount] = useState(0);
+  const [countdown, setCountdown] = useState(0);
   const [checking, setChecking] = useState(false);
   const [dataUrl, setDataUrl] = useState('');
   const [qrError, setQrError] = useState('');
@@ -215,12 +224,18 @@ export default function DynamicTab() {
       });
       if (!putRes.ok) throw new Error(explainGh(await readGhMessage(putRes), putRes.status));
       window.localStorage.setItem('qr-gh-pat', token);
-      setLastUploaded(merged[FIXED_CODE].target);
+      const uploadedTarget = merged[FIXED_CODE].target;
+      setLastUploaded(uploadedTarget);
+      lastUploadedRef.current = uploadedTarget;
       const nov = { ...overrides };
       delete nov[FIXED_CODE];
       setOverrides(nov);
       saveOverrides(nov);
-      setPubMsg('上傳成功！網站約 1 分鐘後更新好，舊 QR 就會連到新網頁，不用重印。可以按下面的「檢查網站更新好了沒」確認。');
+      setPubMsg('上傳成功！正在自動確認網站更新好了沒，你不用一直按，等著看結果就好。');
+      setCheckCount(0);
+      setCountdown(FIRST_CHECK_SEC);
+      setAutoChecking(true);
+      setLiveMsg(`已送出，${FIRST_CHECK_SEC} 秒後開始自動確認…`);
     } catch (e: any) {
       setPubMsg(e?.message || '上傳失敗，請檢查網路後再試。');
     } finally {
@@ -228,27 +243,72 @@ export default function DynamicTab() {
     }
   };
 
-  const handleCheckLive = async () => {
-    setCheckingLive(true);
-    setLiveMsg('檢查中…');
+  /** 讀一次線上設定檔：回傳 ok（已更新好）/ pending（還在更新）/ error（讀不到） */
+  const checkLiveSite = useCallback(async (expect: string): Promise<'ok' | 'pending' | 'error'> => {
     try {
       const base = import.meta.env.BASE_URL || '/';
       const res = await fetch(`${base}links.json?t=${Date.now()}`, { cache: 'no-store' });
-      if (!res.ok) throw new Error('讀不到網站資料');
+      if (!res.ok) return 'error';
       const data = await res.json();
       const live = data?.links?.[FIXED_CODE]?.target || '';
-      const expect = lastUploaded || localTarget;
-      if (live && expect && live === expect) {
-        setLiveMsg(`網站已更新好！現在手機掃就會到：${live}`);
-      } else if (!live) {
-        setLiveMsg('網站還沒準備好，請稍後再按一次檢查。');
-      } else {
-        setLiveMsg(`網站還在更新中，目前還是舊的。等約 1 分鐘再按一次檢查。（網站目前：${live}）`);
-      }
+      return live && expect && live === expect ? 'ok' : 'pending';
     } catch {
+      return 'error';
+    }
+  }, []);
+
+  /** 自動確認迴圈：倒數 → 檢查 → 還沒好就再倒數，直到更新好或超過次數 */
+  useEffect(() => {
+    if (!autoChecking) return;
+    if (countdown > 0) {
+      const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+      return () => clearTimeout(t);
+    }
+    let cancelled = false;
+    (async () => {
+      const n = checkCount + 1;
+      setLiveMsg(`確認中…（第 ${n} 次檢查）`);
+      const result = await checkLiveSite(lastUploadedRef.current);
+      if (cancelled) return;
+      if (result === 'ok') {
+        setLiveMsg(`網站已更新好！現在手機掃就會到：${lastUploadedRef.current}`);
+        setAutoChecking(false);
+      } else if (n >= MAX_CHECKS) {
+        setLiveMsg('等超過 5 分鐘還沒更新好，可能是網站部署卡住了，請稍後再按一次檢查。');
+        setAutoChecking(false);
+      } else {
+        setCheckCount(n);
+        setCountdown(CHECK_EVERY_SEC);
+        setLiveMsg(`確認中…網站還在更新（第 ${n} 次檢查），${CHECK_EVERY_SEC} 秒後自動再檢查，不用按。`);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [autoChecking, countdown, checkCount, checkLiveSite]);
+
+  const handleCheckLive = async () => {
+    const expect = lastUploaded || localTarget;
+    if (!expect) { setLiveMsg('還沒有上傳過，先做第 2 步儲存、第 4 步公開上線。'); return; }
+    setCheckingLive(true);
+    setLiveMsg('檢查中…');
+    const result = await checkLiveSite(expect);
+    setCheckingLive(false);
+    if (result === 'ok') {
+      setLiveMsg(`網站已更新好！現在手機掃就會到：${expect}`);
+      setAutoChecking(false);
+    } else if (result === 'pending') {
+      try {
+        const base = import.meta.env.BASE_URL || '/';
+        const res = await fetch(`${base}links.json?t=${Date.now()}`, { cache: 'no-store' });
+        const data = res.ok ? await res.json() : null;
+        const live = data?.links?.[FIXED_CODE]?.target || '';
+        setLiveMsg(live
+          ? `網站還在更新中，目前還是舊的。等一下再按一次檢查。（網站目前：${live}）`
+          : '網站還沒準備好，請稍後再按一次檢查。');
+      } catch {
+        setLiveMsg('網站還在更新中，等一下再按一次檢查。');
+      }
+    } else {
       setLiveMsg('檢查失敗，請檢查網路後再試。');
-    } finally {
-      setCheckingLive(false);
     }
   };
 
