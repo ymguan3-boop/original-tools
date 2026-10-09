@@ -66,6 +66,9 @@ export default function DynamicTab() {
   const [showPat, setShowPat] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [pubMsg, setPubMsg] = useState('');
+  const [lastUploaded, setLastUploaded] = useState('');
+  const [checkingLive, setCheckingLive] = useState(false);
+  const [liveMsg, setLiveMsg] = useState('');
   const [checking, setChecking] = useState(false);
   const [dataUrl, setDataUrl] = useState('');
   const [qrError, setQrError] = useState('');
@@ -212,11 +215,40 @@ export default function DynamicTab() {
       });
       if (!putRes.ok) throw new Error(explainGh(await readGhMessage(putRes), putRes.status));
       window.localStorage.setItem('qr-gh-pat', token);
-      setPubMsg('上傳成功！網站約 1 分鐘後更新好，舊 QR 就會連到新網頁，不用重印。');
+      setLastUploaded(merged[FIXED_CODE].target);
+      const nov = { ...overrides };
+      delete nov[FIXED_CODE];
+      setOverrides(nov);
+      saveOverrides(nov);
+      setPubMsg('上傳成功！網站約 1 分鐘後更新好，舊 QR 就會連到新網頁，不用重印。可以按下面的「檢查網站更新好了沒」確認。');
     } catch (e: any) {
       setPubMsg(e?.message || '上傳失敗，請檢查網路後再試。');
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const handleCheckLive = async () => {
+    setCheckingLive(true);
+    setLiveMsg('檢查中…');
+    try {
+      const base = import.meta.env.BASE_URL || '/';
+      const res = await fetch(`${base}links.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('讀不到網站資料');
+      const data = await res.json();
+      const live = data?.links?.[FIXED_CODE]?.target || '';
+      const expect = lastUploaded || localTarget;
+      if (live && expect && live === expect) {
+        setLiveMsg(`網站已更新好！現在手機掃就會到：${live}`);
+      } else if (!live) {
+        setLiveMsg('網站還沒準備好，請稍後再按一次檢查。');
+      } else {
+        setLiveMsg(`網站還在更新中，目前還是舊的。等約 1 分鐘再按一次檢查。（網站目前：${live}）`);
+      }
+    } catch {
+      setLiveMsg('檢查失敗，請檢查網路後再試。');
+    } finally {
+      setCheckingLive(false);
     }
   };
 
@@ -318,9 +350,9 @@ export default function DynamicTab() {
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
           <StepBadge n="2" /> <Link2 className="w-4 h-4 text-indigo-600" /> 貼上要給大家看的網頁
-          {modified && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">剛改好，還沒公開</span>
-          )}
+              {modified && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">已儲存</span>
+              )}
         </h3>
         <input
           value={editTarget}
@@ -416,7 +448,14 @@ export default function DynamicTab() {
             <Upload className="w-4 h-4" /> {publishing ? '上傳中…' : '公開上線'}
           </button>
         </div>
-        {pubMsg && <p className="mt-2 text-xs leading-relaxed text-amber-900">{pubMsg}</p>}
+          {pubMsg && <p className="mt-2 text-xs leading-relaxed text-amber-900">{pubMsg}</p>}
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button onClick={handleCheckLive} disabled={checkingLive}
+              className="px-4 py-2.5 rounded-xl bg-white border border-amber-300 text-amber-900 text-sm font-medium hover:bg-amber-100/50 disabled:opacity-50 inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4" /> {checkingLive ? '檢查中…' : '檢查網站更新好了沒'}
+            </button>
+          </div>
+          {liveMsg && <p className="mt-2 text-xs leading-relaxed text-amber-900">{liveMsg}</p>}
         <p className="mt-2 text-[11px] text-amber-800">
           想自己動手也可以：<a href={GH_FOLDER_URL} target="_blank" rel="noreferrer" className="underline">直接打開 GitHub 資料夾上傳覆蓋 <ExternalLink className="w-3 h-3 inline" /></a>
         </p>
