@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import QRCode from 'qrcode';
-import { QrCode, Download, Link2, Palette, Settings2, ExternalLink, Github, Sparkles } from 'lucide-react';
+import { QrCode, Download, Link2, Palette, Settings2, ExternalLink, Github, Sparkles, Repeat } from 'lucide-react';
+import DynamicTab from './DynamicTab';
 
 const DEFAULT_URL = 'https://example.com';
 
@@ -23,6 +24,7 @@ export default function App() {
   const [error, setError] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dataUrl, setDataUrl] = useState('');
+  const [tab, setTab] = useState<'static' | 'dynamic'>('static');
 
   const valid = isValidUrl(url.trim());
 
@@ -118,7 +120,7 @@ export default function App() {
       {/* Hero */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-medium border border-indigo-100">
-          <Sparkles className="w-3.5 h-3.5" /> 僅保留「網站連結」QR Code · 專注、輕量、快速
+          <Sparkles className="w-3.5 h-3.5" /> 網站連結 QR ＋ 活動式連結 QR · 專注、輕量、快速
         </div>
         <h1 className="mt-3 text-[28px] sm:text-[32px] font-extrabold tracking-tight text-slate-900">
           輸入網址，一鍵產生 QR Code
@@ -128,7 +130,37 @@ export default function App() {
         </p>
       </div>
 
+      {/* Tabs */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-2">
+        <div className="inline-flex p-1 rounded-2xl bg-white border border-slate-200 shadow-sm">
+          <button
+            onClick={() => setTab('static')}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition
+              ${tab === 'static' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+          >
+            <Link2 className="w-4 h-4" /> 一般連結 QR
+          </button>
+          <button
+            onClick={() => setTab('dynamic')}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition
+              ${tab === 'dynamic' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+          >
+            <Repeat className="w-4 h-4" /> 活動式連結 QR
+          </button>
+        </div>
+        {tab === 'dynamic' && (
+          <p className="mt-3 text-xs text-slate-500">
+            活動式連結 QR：QR 圖固定不變，目標網址隨時可改（透過中轉表），印出後永久有效。
+          </p>
+        )}
+      </div>
+
       {/* Main */}
+      {tab === 'dynamic' ? (
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-10">
+          <DynamicTab />
+        </div>
+      ) : (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-10 grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-6">
         {/* Left: Form */}
         <div className="space-y-5">
@@ -309,6 +341,7 @@ export default function App() {
           </div>
         </div>
       </div>
+      )}
 
       <footer className="border-t border-slate-200 py-6">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">

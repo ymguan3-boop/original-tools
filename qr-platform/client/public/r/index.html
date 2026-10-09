@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>連結跳轉中…</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #f8fafc; color: #0f172a;
+    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", system-ui, sans-serif; }
+  .card { width: min(92vw, 420px); background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
+    padding: 28px 24px; text-align: center; box-shadow: 0 8px 30px rgba(15,23,42,.06); }
+  .spinner { width: 36px; height: 36px; margin: 0 auto 14px; border-radius: 50%;
+    border: 3px solid #e0e7ff; border-top-color: #4f46e5; animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  h1 { font-size: 17px; margin: 0 0 8px; }
+  p { font-size: 13px; color: #64748b; line-height: 1.8; margin: 6px 0; word-break: break-all; }
+  code { font-family: ui-monospace, monospace; background: #f1f5f9; padding: 1px 6px; border-radius: 6px; }
+  a.btn { display: inline-block; margin-top: 12px; padding: 10px 20px; border-radius: 999px;
+    background: #4f46e5; color: #fff; text-decoration: none; font-size: 14px; font-weight: 600; }
+  a.link { color: #4f46e5; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="spinner" id="spinner"></div>
+  <h1 id="title">連結跳轉中…</h1>
+  <p id="desc">正在為你開啟目標頁面。</p>
+</div>
+<script>
+(function () {
+  var card = document.getElementById('card');
+  var title = document.getElementById('title');
+  var desc = document.getElementById('desc');
+  var spinner = document.getElementById('spinner');
+
+  function showError(code, homeHref) {
+    spinner.style.display = 'none';
+    title.textContent = '找不到這個活動連結';
+    desc.innerHTML = '代碼 <code>' + code + '</code> 尚未設定或已停用。<br>請聯絡主辦單位確認。';
+    var a = document.createElement('a');
+    a.className = 'btn';
+    a.href = homeHref;
+    a.textContent = '回 QR 產生器首頁';
+    card.appendChild(a);
+  }
+
+  function isHttpUrl(s) {
+    return /^https?:\/\//i.test(s);
+  }
+
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var code = (params.get('c') || '').trim();
+    // 目錄基準：…/qr-platform/r/ → …/qr-platform
+    var path = window.location.pathname;
+    var base = path.indexOf('/r/') >= 0 ? path.split('/r/')[0] : path.replace(/\/$/, '');
+    if (!base) base = '.';
+    var linksUrl = base + '/links.json';
+    var homeHref = base + '/';
+
+    if (!code) { showError('(空代碼)', homeHref); return; }
+
+    // 1) 本機覆寫（產生器頁「儲存」後立即在本機生效，公開生效仍需更新 links.json）
+    try {
+      var overrides = JSON.parse(window.localStorage.getItem('qr-dynamic-overrides') || '{}');
+      if (overrides && typeof overrides[code] === 'string' && isHttpUrl(overrides[code])) {
+        desc.innerHTML = '即將前往：<br><code>' + overrides[code].replace(/</g, '&lt;') + '</code>';
+        window.location.replace(overrides[code]);
+        return;
+      }
+    } catch (e) { /* 忽略，繼續讀 links.json */ }
+
+    // 2) 讀中轉表跳轉
+    fetch(linksUrl, { cache: 'no-store' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('links.json 載入失敗 (' + res.status + ')');
+        return res.json();
+      })
+      .then(function (data) {
+        var entry = data && data.links && data.links[code];
+        var target = entry && entry.target;
+        if (typeof target === 'string' && isHttpUrl(target.trim())) {
+          desc.innerHTML = '即將前往：<br><code>' + target.trim().replace(/</g, '&lt;') + '</code>';
+          window.location.replace(target.trim());
+        } else {
+          showError(code, homeHref);
+        }
+      })
+      .catch(function () { showError(code, homeHref); });
+
+    // 逾時保護：8 秒還沒跳就顯示手動連結
+    setTimeout(function () {
+      if (spinner.style.display !== 'none' && title.textContent.indexOf('跳轉') >= 0) {
+        desc.innerHTML += '<br>若沒有自動跳轉，請檢查網路後 <a class="link" href="" onclick="location.reload();return false;">重新整理</a>。';
+      }
+    }, 8000);
+  } catch (e) {
+    showError('(讀取失敗)', './');
+  }
+})();
+</script>
+</body>
+</html>
