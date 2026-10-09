@@ -150,7 +150,7 @@ export default function App() {
         </div>
         {tab === 'dynamic' && (
           <p className="mt-3 text-xs text-slate-500">
-            活動式連結 QR：QR 圖固定不變，目標網址隨時可改（透過中轉表），印出後永久有效。
+            活動式連結 QR：先把圖印出去，網址以後隨時改，舊圖繼續用。
           </p>
         )}
       </div>
