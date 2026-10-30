@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { getDinoClient } from './dinoClient';
 import type { ModelState } from './dinoClient';
+import { getCached, setCached, clearEmbedCache, countCached } from './embedCache';
 
 /* =====================================================================
  *  影像分析引擎：DINOv2-small（瀏覽器本機執行，免 API Key）
@@ -388,6 +389,7 @@ const App = () => {
       /* 3) 逐張分析：縮圖 + 像素特徵 + 特徵向量（Worker 內逐張推論，結果可重現） */
       const hashToIndex = new Map<string, number>();
       let reused = 0;
+      let cachedHitCount = 0;
       for (let i = 0; i < files.length; i++) {
         if (stopRef.current) return;
         const file = files[i];
@@ -405,6 +407,22 @@ const App = () => {
         }
         if (hash) hashToIndex.set(hash, i);
 
+        // IndexedDB 快取：命中則跳過推論
+        let cacheHit = false;
+        if (hash) {
+          const cached = await getCached(hash);
+          if (cached) {
+            sigs[i] = cached.sig;
+            embeddings[i] = cached.embedding;
+            thumbs[i] = URL.createObjectURL(cached.thumb);
+            hashToIndex.set(hash, i);
+            cachedHitCount++;
+            setProgress({ stage: `分析照片 ${i + 1} / ${files.length}（已從快取載入）`, done: i + 1, total: files.length });
+            cacheHit = true;
+          }
+        }
+        if (cacheHit) continue;
+
         setProgress({ stage: `分析照片 ${i + 1} / ${files.length}`, done: i, total: files.length });
 
         const [item] = await client.analyze([{ id: i, file }]);
@@ -412,6 +430,16 @@ const App = () => {
           sigs[item.id] = item.sig;
           embeddings[item.id] = item.embedding;
           thumbs[item.id] = URL.createObjectURL(item.thumb);
+          // 成功取得向量才寫入快取
+          if (hash && item.embedding) {
+            await setCached({
+              hash,
+              sig: item.sig,
+              embedding: item.embedding,
+              thumb: item.thumb,
+              createdAt: Date.now(),
+            });
+          }
         }
         setProgress({ stage: `分析照片 ${i + 1} / ${files.length}`, done: i + 1, total: files.length });
         await sleep(0);
@@ -483,6 +511,8 @@ const App = () => {
         );
       } else if (matches.length === 0) {
         setNotice(`沒有相似度達 ${listThreshold}% 的配對，可調低「列出門檻」後重新分析。`);
+      } else if (!matches.some((r) => primaryScore(r) < 80)) {
+        setNotice('所有配對相似度均達 80%，無低於 80% 的案例。');
       }
 
       setResults(capped);
@@ -493,6 +523,7 @@ const App = () => {
           `分析完成！\n` +
             `照片 ${files.length} 張（比對 ${workload.pairs.toLocaleString()} 組）\n` +
             (reused > 0 ? `其中 ${reused} 張與其他檔案完全相同，已直接沿用分析結果\n` : '') +
+            (cachedHitCount > 0 ? `其中 ${cachedHitCount} 張從快取載入，未重新推論\n` : '') +
             `符合門檻 ${matches.length} 組${matches.length > MAX_RESULTS ? `（清單保留前 ${MAX_RESULTS} 組）` : ''}`
         );
       }, 100);
@@ -533,6 +564,12 @@ const App = () => {
     });
     return acc;
   }, [results]);
+
+  /** 低於「列出門檻」的分區沒有任何資料，隱藏以避免誤導 */
+  const visibleBuckets = useMemo(
+    () => RANGE_CONFIG.filter((c) => c.max > listThreshold),
+    [listThreshold]
+  );
 
   const toggleRangeFilter = (key: string) => {
     setSelectedRanges((prev) => {
@@ -935,6 +972,16 @@ ${scoreInfo}
               <Cpu className="w-4 h-4 text-slate-600" />
               <span className="text-sm font-semibold text-slate-700">影像引擎</span>
               <span className={`text-[11px] px-2 py-0.5 rounded-full border ${dinoBadge.cls}`}>{dinoBadge.text}</span>
+              <button
+                onClick={async () => {
+                  await clearEmbedCache();
+                  setNotice('已清除嵌入快取。');
+                }}
+                title="清除 IndexedDB 中快取的嵌入向量與縮圖"
+                className="text-[11px] px-2 py-0.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-500"
+              >
+                清除快取
+              </button>
             </div>
             <div className="text-xs text-slate-500 flex-1">
               DINOv2-small（{DINO_MODEL_ID}）在<span className="font-semibold text-slate-700">背景執行緒</span>本機執行，
@@ -1117,6 +1164,7 @@ ${scoreInfo}
                     onChange={(e) => setListThreshold(Number(e.target.value))}
                     className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">分析時套用；變更後需重新分析才會生效（分布圖也會同步隱藏低於此值的分區）</p>
                 </div>
 
                 <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded p-2 leading-relaxed">
@@ -1197,7 +1245,7 @@ ${scoreInfo}
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                {RANGE_CONFIG.map((config) => {
+                {visibleBuckets.map((config) => {
                   const active = selectedRanges.has(config.key);
                   return (
                     <button
@@ -1263,7 +1311,10 @@ ${scoreInfo}
                 {filteredResults.length === 0 && (
                   <div className="h-full flex flex-col items-center justify-center text-slate-400">
                     <FileImage className="w-16 h-16 mb-3 opacity-20" />
-                    <p className="text-sm">清單為空</p>
+                    <p className="text-sm">{results.length === 0 ? '清單為空' : '目前的分數區間篩選沒有命中任何項目'}</p>
+                    {results.length === 0 && (
+                      <p className="text-xs mt-1 text-slate-400">所有配對相似度均達 {listThreshold}%，無低於 {listThreshold}% 的案例</p>
+                    )}
                   </div>
                 )}
 
