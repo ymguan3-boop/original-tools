@@ -1,26 +1,29 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { ChangeEvent, MouseEvent } from 'react';
 import {
-  FileImage, Play, CheckCircle, AlertTriangle, X, Loader2, Plus, Trash2, Zap,
-  AlertCircle, BarChart3, Folder, Filter, ClipboardList, Eraser, ScanSearch,
-  FileCheck, KeyRound, ExternalLink, Info, RefreshCw, Cpu, Sparkles,
+  FileImage, Play, CheckCircle, X, Loader2, Plus, Trash2, AlertCircle,
+  BarChart3, Folder, Filter, ClipboardList, Eraser, FileCheck,
+  KeyRound, ExternalLink, Info, RefreshCw, Cpu, Sparkles, AlertTriangle, StopCircle,
+  SquareStack,
 } from 'lucide-react';
+import { getDinoClient } from './dinoClient';
+import type { ModelState } from './dinoClient';
 
 /* =====================================================================
- *  相似度引擎：DINOv2-small（在瀏覽器本機執行，免 API Key）
- *  - Transformers.js v4 + ONNX Runtime WASM
- *  - q8 量化模型約 23MB，首次使用時下載，之後由瀏覽器快取
- *  - 每張圖只推論一次，之後比對只是 384 維向量的餘弦相似度（瞬間完成）
+ *  影像分析引擎：DINOv2-small（瀏覽器本機執行，免 API Key）
+ *  ---------------------------------------------------------------------
+ *  - 全部運算在 Web Worker 內完成，主執行緒（UI）永遠不會被阻塞
+ *  - 每張圖只解碼一次：同時產生 480px 縮圖、64×64 像素特徵、384 維特徵向量
+ *  - 特徵向量比對只是餘弦相似度，瞬間完成，因此不需要先用像素初篩
  * ===================================================================== */
 const DINO_MODEL_ID = 'Xenova/dinov2-small';
-const DINO_DTYPE = 'q8';
-/** DINOv2 原生輸入邊長 */
-const DINO_INPUT_SIDE = 224;
+/** 清單最多保留的組數，避免記憶體爆掉 */
+const MAX_RESULTS = 2000;
+/** 清單每頁顯示組數 */
+const PAGE_SIZE = 30;
 
 /* =====================================================================
  *  文字說明引擎：OpenRouter（選配）
- *  - 僅用於第三步「差異度說明 + 分析結論」，未填金鑰時改用規則模板
- *  - 金鑰只存在瀏覽器 localStorage，請求由瀏覽器直送 OpenRouter
  * ===================================================================== */
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_MODELS = 'https://openrouter.ai/api/v1/models';
@@ -40,9 +43,10 @@ const KEY_STORAGE = 'image-audit:openrouter-key';
 const MODEL_STORAGE = 'image-audit:openrouter-model';
 const TOPN_STORAGE = 'image-audit:top-n';
 
-/* 送給 OpenRouter 的圖片縮圖上限 */
+/** 送給 OpenRouter 的縮圖長邊 */
 const SEND_MAX_SIDE = 1024;
-const JPEG_QUALITY = 0.85;
+/** 匯出 Word 時內嵌圖片的長邊（避免報告檔過大） */
+const REPORT_MAX_SIDE = 1280;
 
 /* ------------------------------- 型別 ------------------------------- */
 
@@ -52,25 +56,20 @@ interface ImageFolder {
   files: File[];
 }
 
-interface PixelSample {
-  data: Uint8ClampedArray;
-  width: number;
-  height: number;
-}
-
-type AnalysisSource = 'dino' | 'ai' | 'rule' | null;
-
 interface MatchItem {
   id: string;
-  similarity: number;
+  /** DINOv2 特徵相似度 0~100（主要分數；模型不可用時為 null） */
+  dino: number | null;
+  /** 像素相似度 0~100（輔助參考） */
+  pixel: number;
   fileA: File;
   fileB: File;
   sourceA: string;
   sourceB: string;
-  /** DINOv2 特徵相似度 0~100（原 AI 分數欄位） */
-  aiScore: number | null;
-  aiAnalysis: string | null;
-  analysisSource: AnalysisSource;
+  thumbA: string;
+  thumbB: string;
+  analysis: string | null;
+  analysisSource: 'ai' | 'rule' | null;
 }
 
 interface RangeConfig {
@@ -97,21 +96,46 @@ interface ApiError extends Error {
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** 將 File 轉為 Data URL（Word 報告內嵌圖片用） */
-const fileToDataURL = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error ?? new Error('讀取檔案失敗'));
-  });
+/** 主要分數：有 DINOv2 就用它，否則退回像素相似度 */
+const primaryScore = (item: MatchItem): number => item.dino ?? item.pixel;
 
-/** 縮圖並轉為 JPEG Data URL */
-const fileToJpegDataUrl = (
-  file: File,
-  maxSide: number,
-  quality = JPEG_QUALITY
-): Promise<string> =>
+/** 餘弦相似度（Worker 回傳的向量已正規化，因此等同內積） */
+const cosineOf = (a: Float32Array, b: Float32Array): number => {
+  const n = Math.min(a.length, b.length);
+  let dot = 0;
+  for (let i = 0; i < n; i++) dot += a[i] * b[i];
+  return dot;
+};
+
+/** 像素相似度（64×64 RGBA 特徵，0~100） */
+const pixelSimilarity = (a: Uint8ClampedArray, b: Uint8ClampedArray): number => {
+  let diff = 0;
+  let count = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i += 4) {
+    diff +=
+      (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) /
+      (255 * 3);
+    count++;
+  }
+  return count === 0 ? 0 : 100 - (diff / count) * 100;
+};
+
+/** 檔案內容雜湊：用來偵測「位元組完全相同」的檔案，直接沿用分析結果避免重複推論 */
+const contentHash = async (file: File): Promise<string | null> => {
+  try {
+    if (!globalThis.crypto?.subtle) return null;
+    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  } catch {
+    return null;
+  }
+};
+
+/** 將 File 縮圖後轉為 JPEG Data URL（OpenRouter 傳圖／Word 內嵌用） */
+const fileToJpegDataUrl = (file: File, maxSide: number, quality = 0.85): Promise<string> =>
   new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -142,97 +166,34 @@ const fileToJpegDataUrl = (
     img.src = url;
   });
 
-/** 中心裁切取樣，產生 64×64 像素特徵 */
-const sampleImage = (file: File, sampleSize = 64): Promise<PixelSample> =>
-  new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = sampleSize;
-        canvas.height = sampleSize;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('瀏覽器不支援 Canvas');
-        const minSide = Math.min(img.width, img.height);
-        const sx = (img.width - minSide) / 2;
-        const sy = (img.height - minSide) / 2;
-        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, sampleSize, sampleSize);
-        const data = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
-        resolve({ data, width: sampleSize, height: sampleSize });
-      } catch (e) {
-        reject(e as Error);
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error(`無法讀取圖片：${file.name}`));
-    };
-    img.src = url;
-  });
-
-/** 像素級相似度（0~100） */
-const calculateSimilarity = (a: PixelSample, b: PixelSample): number => {
-  let diff = 0;
-  const totalPixels = a.data.length / 4;
-  for (let i = 0; i < a.data.length; i += 4) {
-    const r = Math.abs(a.data[i] - b.data[i]);
-    const g = Math.abs(a.data[i + 1] - b.data[i + 1]);
-    const bl = Math.abs(a.data[i + 2] - b.data[i + 2]);
-    diff += (r + g + bl) / (255 * 3);
-  }
-  return 100 - (diff / totalPixels) * 100;
-};
-
-/** 餘弦相似度（自行計算正規化，避免上游 normalize 行為差異） */
-const cosineSimilarity = (a: Float32Array, b: Float32Array): number => {
-  const n = Math.min(a.length, b.length);
-  let dot = 0;
-  let na = 0;
-  let nb = 0;
-  for (let i = 0; i < n; i++) {
-    dot += a[i] * b[i];
-    na += a[i] * a[i];
-    nb += b[i] * b[i];
-  }
-  const denom = Math.sqrt(na) * Math.sqrt(nb);
-  return denom === 0 ? 0 : dot / denom;
-};
-
-/** 圖片預覽 URL 快取，避免每次 render 都新建 ObjectURL（記憶體洩漏） */
-const urlCache = new WeakMap<File, string>();
-const fileUrl = (file: File): string => {
-  let url = urlCache.get(file);
+/** 原始尺寸預覽 URL 快取（僅詳細檢視用，一次只有一組） */const fullUrlCache = new WeakMap<File, string>();
+const fullUrl = (file: File): string => {
+  let url = fullUrlCache.get(file);
   if (!url) {
     url = URL.createObjectURL(file);
-    urlCache.set(file, url);
+    fullUrlCache.set(file, url);
   }
   return url;
 };
 
-const isFatalApiError = (error: ApiError): boolean =>
-  [401, 402, 403, 404, 429].includes(error.status ?? -1);
-
 /* --------------------------- 相似度分區設定 --------------------------- */
 
 const RANGE_CONFIG: RangeConfig[] = [
-  { key: '95-100', label: '95-100%', min: 95, max: 101, color: 'text-red-700', bg: 'bg-red-100', border: 'border-red-200' },
-  { key: '90-94',  label: '90-94%',  min: 90, max: 95,  color: 'text-red-600', bg: 'bg-red-50',  border: 'border-red-200' },
-  { key: '85-89',  label: '85-89%',  min: 85, max: 90,  color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
-  { key: '80-84',  label: '80-84%',  min: 80, max: 85,  color: 'text-orange-500', bg: 'bg-orange-50/50', border: 'border-orange-100' },
-  { key: '60-79',  label: '60-79%',  min: 60, max: 80,  color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200' },
-  { key: '50-59',  label: '50-59%',  min: 50, max: 60,  color: 'text-blue-600',   bg: 'bg-blue-50',   border: 'border-blue-200' },
+  { key: '97-100', label: '97-100%', min: 97, max: 101, color: 'text-red-700', bg: 'bg-red-100', border: 'border-red-200' },
+  { key: '94-96', label: '94-96%', min: 94, max: 97, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
+  { key: '90-93', label: '90-93%', min: 90, max: 94, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
+  { key: '85-89', label: '85-89%', min: 85, max: 90, color: 'text-orange-500', bg: 'bg-orange-50/60', border: 'border-orange-100' },
+  { key: '80-84', label: '80-84%', min: 80, max: 85, color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200' },
+  { key: 'below-80', label: '80% 以下', min: 0, max: 80, color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200' },
 ];
 
-/** 依 DINOv2 與像素分數產生規則版差異說明（免 API Key） */
+/** 規則版差異說明（免 API Key） */
 const buildRuleText = (item: MatchItem): string => {
-  const d = item.aiScore;
-  const p = item.similarity;
+  const d = item.dino;
+  const p = item.pixel;
 
   if (d === null) {
-    return `1. 差異度說明：像素相似度 ${p}%，尚未進行 DINOv2 特徵比對，無法判定語意層級差異。\n2. 分析結論：建議先執行第二步「相似度分析」後再進行判定。`;
+    return `1. 差異度說明：像素相似度 ${p}%（本次未取得 DINOv2 特徵，僅以像素比對）。\n2. 分析結論：建議確認兩張照片的拍攝時間與地點後再判定，或稍後重試以取得特徵比對結果。`;
   }
 
   const head = `DINOv2 特徵相似度 ${d}%、像素相似度 ${p}%。`;
@@ -252,44 +213,62 @@ const buildRuleText = (item: MatchItem): string => {
   return `1. 差異度說明：${head}兩張影像在整體特徵上差異明顯。\n2. 分析結論：研判為不同照片，無重複請款疑慮。`;
 };
 
+const isFatalApiError = (error: ApiError): boolean =>
+  [401, 402, 403, 404, 429].includes(error.status ?? -1);
+
 /* =============================== App =============================== */
 
 const App = () => {
-  // --- 本地模型狀態 ---
-  const [dinoState, setDinoState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
-  const [dinoProgress, setDinoProgress] = useState(0);
-  const [dinoError, setDinoError] = useState<string | null>(null);
-  const extractorRef = useRef<any>(null);
-  const embeddingCache = useRef(new WeakMap<File, Float32Array>());
+  /* ---------- 模型狀態 ---------- */
+  const [modelState, setModelState] = useState<ModelState>('idle');
+  const [modelProgress, setModelProgress] = useState(0);
+  const [modelError, setModelError] = useState<string | null>(null);
 
-  // --- 文字引擎設定 ---
+  /* ---------- 文字引擎設定 ---------- */
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORAGE) ?? '');
   const [model, setModel] = useState(() => localStorage.getItem(MODEL_STORAGE) ?? DEFAULT_TEXT_MODEL);
   const [topN, setTopN] = useState(() => Number(localStorage.getItem(TOPN_STORAGE) ?? 20));
   const [models, setModels] = useState<OpenRouterModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
 
-  // --- 資料 ---
+  /* ---------- 資料 ---------- */
   const [folders, setFolders] = useState<ImageFolder[]>([]);
-  const [threshold, setThreshold] = useState(50);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0, status: '' });
+  const [listThreshold, setListThreshold] = useState(80);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [progress, setProgress] = useState({ stage: '', done: 0, total: 0 });
 
   const [results, setResults] = useState<MatchItem[]>([]);
-  const [filteredResults, setFilteredResults] = useState<MatchItem[]>([]);
   const [selectedRanges, setSelectedRanges] = useState<Set<string>>(new Set());
   const [selectedResult, setSelectedResult] = useState<MatchItem | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  // --- AI 狀態 ---
-  const [isScoring, setIsScoring] = useState(false);
-  const [scoreProgress, setScoreProgress] = useState({ done: 0, total: 0, label: '' });
-  const [analyzingAiIds, setAnalyzingAiIds] = useState<Set<string>>(new Set());
+  /* ---------- 說明／匯出 ---------- */
+  const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
   const [apiError, setApiError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
 
-  // --- 刪除門檻（DINOv2 分數分佈約 80~99，故預設 90）---
-  const [pixelDeleteThreshold, setPixelDeleteThreshold] = useState(70);
-  const [aiDeleteThreshold, setAiDeleteThreshold] = useState(90);
+  /* ---------- 刪除門檻 ---------- */
+  const [deleteThreshold, setDeleteThreshold] = useState(90);
+
+  const stopRef = useRef(false);
+
+  /* ---------------------- 初始化 Worker 狀態 ---------------------- */
+
+  useEffect(() => {
+    const client = getDinoClient();
+    client.onStateChange = (state, value, error) => {
+      setModelState(state);
+      setModelProgress(value);
+      setModelError(error);
+    };
+    setModelState(client.state);
+    setModelProgress(client.progress);
+    setModelError(client.error);
+    return () => {
+      client.onStateChange = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (apiKey) localStorage.setItem(KEY_STORAGE, apiKey);
@@ -299,52 +278,287 @@ const App = () => {
   useEffect(() => localStorage.setItem(MODEL_STORAGE, model), [model]);
   useEffect(() => localStorage.setItem(TOPN_STORAGE, String(topN)), [topN]);
 
-  /* ---------------------- DINOv2 模型載入 ---------------------- */
+  /* ---------------------- 預估工作量 ---------------------- */
 
-  const ensureExtractor = async (): Promise<any> => {
-    if (extractorRef.current) return extractorRef.current;
+  const workload = useMemo(() => {
+    const unique = new Set<File>();
+    const perFolder: number[] = [];
+    folders.forEach((folder) => {
+      const seen = new Set<File>();
+      folder.files.forEach((file) => {
+        unique.add(file);
+        seen.add(file);
+      });
+      perFolder.push(seen.size);
+    });
+    let pairs = 0;
+    for (let i = 0; i < perFolder.length; i++) {
+      for (let j = i + 1; j < perFolder.length; j++) pairs += perFolder[i] * perFolder[j];
+    }
+    return { unique: unique.size, pairs };
+  }, [folders]);
 
-    setDinoState('loading');
-    setDinoProgress(0);
-    setDinoError(null);
+  /* ---------------------- 資料夾操作 ---------------------- */
+
+  const addFolder = (e: ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files;
+    if (!picked || picked.length === 0) return;
+
+    const newFiles = Array.from(picked).filter((f) => f.type.startsWith('image/'));
+    if (newFiles.length === 0) {
+      alert('此資料夾內沒有可用的圖片檔（支援 JPG / PNG / WebP 等）。');
+      e.target.value = '';
+      return;
+    }
+
+    const relativePath = (newFiles[0] as File & { webkitRelativePath?: string }).webkitRelativePath;
+    const folderName = relativePath ? relativePath.split('/')[0] : `資料夾 ${folders.length + 1}`;
+
+    setFolders((prev) => [...prev, { id: Date.now(), name: folderName, files: newFiles }]);
+    e.target.value = '';
+  };
+
+  const removeFolder = (id: number) => setFolders((prev) => prev.filter((f) => f.id !== id));
+
+  /* ---------------------- 一次分析（核心） ---------------------- */
+
+  const stopAnalysis = () => {
+    stopRef.current = true;
+    getDinoClient().terminate();
+    setProgress({ stage: '已停止', done: 0, total: 0 });
+  };
+
+  const runAnalysis = async () => {
+    if (folders.length < 2) {
+      alert('請至少加入兩個資料夾以進行交叉比對');
+      return;
+    }
+
+    /* 1) 建立唯一圖片清單（同一張圖只推論一次） */
+    const files: File[] = [];
+    const fileIndex = new Map<File, number>();
+    const occurrences: { fi: number; folderId: number; folderName: string }[] = [];
+    for (const folder of folders) {
+      for (const file of folder.files) {
+        let fi = fileIndex.get(file);
+        if (fi === undefined) {
+          fi = files.length;
+          fileIndex.set(file, fi);
+          files.push(file);
+        }
+        occurrences.push({ fi, folderId: folder.id, folderName: folder.name });
+      }
+    }
+
+    if (files.length < 2) {
+      alert('可分析的圖片不足，請確認資料夾內容。');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    stopRef.current = false;
+    setResults([]);
+    setSelectedRanges(new Set());
+    setVisibleCount(PAGE_SIZE);
+    setApiError(null);
+    setNotice(null);
+
+    /* 清掉上一輪的縮圖 URL */
+    results.forEach((r) => {
+      URL.revokeObjectURL(r.thumbA);
+      URL.revokeObjectURL(r.thumbB);
+    });
+
+    const thumbs: string[] = new Array(files.length).fill('');
+    const sigs: (Uint8ClampedArray | null)[] = new Array(files.length).fill(null);
+    const embeddings: (Float32Array | null)[] = new Array(files.length).fill(null);
+
+    const client = getDinoClient();
 
     try {
-      const tf: any = await import('@huggingface/transformers');
-      tf.env.allowLocalModels = false;
-      tf.env.useBrowserCache = true;
+      /* 2) 載入模型（失敗仍可繼續，只是改用像素比對） */
+      setProgress({ stage: '載入 DINOv2 模型（首次約 23MB）', done: 0, total: files.length });
+      try {
+        await client.init();
+      } catch {
+        /* 失敗訊息會顯示在提示列 */
+      }
+      if (stopRef.current) return;
 
-      const extractor = await tf.pipeline('image-feature-extraction', DINO_MODEL_ID, {
-        dtype: DINO_DTYPE,
-        progress_callback: (p: any) => {
-          if (p?.status === 'progress' && typeof p.progress === 'number') {
-            setDinoProgress(Math.round(p.progress));
+      /* 3) 逐張分析：縮圖 + 像素特徵 + 特徵向量（Worker 內逐張推論，結果可重現） */
+      const hashToIndex = new Map<string, number>();
+      let reused = 0;
+      for (let i = 0; i < files.length; i++) {
+        if (stopRef.current) return;
+        const file = files[i];
+
+        /* 位元組完全相同 → 直接沿用先前算好的結果（省下整次推論） */
+        const hash = await contentHash(file);
+        const twin = hash ? hashToIndex.get(hash) : undefined;
+        if (twin !== undefined) {
+          sigs[i] = sigs[twin];
+          embeddings[i] = embeddings[twin];
+          thumbs[i] = thumbs[twin];
+          reused++;
+          setProgress({ stage: `分析照片 ${i + 1} / ${files.length}（內容相同，沿用結果）`, done: i + 1, total: files.length });
+          continue;
+        }
+        if (hash) hashToIndex.set(hash, i);
+
+        setProgress({ stage: `分析照片 ${i + 1} / ${files.length}`, done: i, total: files.length });
+
+        const [item] = await client.analyze([{ id: i, file }]);
+        if (item) {
+          sigs[item.id] = item.sig;
+          embeddings[item.id] = item.embedding;
+          thumbs[item.id] = URL.createObjectURL(item.thumb);
+        }
+        setProgress({ stage: `分析照片 ${i + 1} / ${files.length}`, done: i + 1, total: files.length });
+        await sleep(0);
+      }
+
+      /* 4) 交叉比對（向量內積，瞬間完成） */
+      setProgress({ stage: '交叉比對中…', done: files.length, total: files.length });
+
+      const byFolder = new Map<number, Set<number>>();
+      const folderName = new Map<number, string>();
+      for (const occ of occurrences) {
+        let set = byFolder.get(occ.folderId);
+        if (!set) {
+          set = new Set<number>();
+          byFolder.set(occ.folderId, set);
+        }
+        set.add(occ.fi);
+        folderName.set(occ.folderId, occ.folderName);
+      }
+
+      const folderIds = [...byFolder.keys()];
+      const matches: MatchItem[] = [];
+      let tick = 0;
+
+      for (let a = 0; a < folderIds.length; a++) {
+        for (let b = a + 1; b < folderIds.length; b++) {
+          const listA = [...(byFolder.get(folderIds[a]) ?? [])];
+          const listB = [...(byFolder.get(folderIds[b]) ?? [])];
+
+          for (const fa of listA) {
+            for (const fb of listB) {
+              tick++;
+              const ea = embeddings[fa];
+              const eb = embeddings[fb];
+              const sigA = sigs[fa];
+              const sigB = sigs[fb];
+
+              const dino = ea && eb ? Math.round(cosineOf(ea, eb) * 1000) / 10 : null;
+              const pixel = sigA && sigB ? Math.round(pixelSimilarity(sigA, sigB) * 100) / 100 : 0;
+              const score = dino ?? pixel;
+              if (score < listThreshold) continue;
+
+              matches.push({
+                id: `${folderIds[a]}-${folderIds[b]}-${fa}-${fb}`,
+                dino,
+                pixel,
+                fileA: files[fa],
+                fileB: files[fb],
+                sourceA: folderName.get(folderIds[a]) ?? 'A',
+                sourceB: folderName.get(folderIds[b]) ?? 'B',
+                thumbA: thumbs[fa],
+                thumbB: thumbs[fb],
+                analysis: null,
+                analysisSource: null,
+              });
+            }
           }
-        },
-      });
 
-      extractorRef.current = extractor;
-      setDinoState('ready');
-      return extractor;
-    } catch (e) {
-      const msg = (e as Error).message || String(e);
-      setDinoState('error');
-      setDinoError(msg);
-      throw new Error(`DINOv2 模型載入失敗（首次使用需下載約 23MB）：${msg}`);
+          if (tick % 3000 < listB.length) await sleep(0);
+        }
+      }
+
+      matches.sort((x, y) => primaryScore(y) - primaryScore(x));
+      const capped = matches.slice(0, MAX_RESULTS);
+
+      if (matches.length > MAX_RESULTS) {
+        setNotice(
+          `符合「相似度 ≥ ${listThreshold}%」的配對共 ${matches.length} 組，清單僅保留分數最高的 ${MAX_RESULTS} 組。建議調高列出門檻以縮小範圍。`
+        );
+      } else if (matches.length === 0) {
+        setNotice(`沒有相似度達 ${listThreshold}% 的配對，可調低「列出門檻」後重新分析。`);
+      }
+
+      setResults(capped);
+      setProgress({ stage: '完成', done: files.length, total: files.length });
+
+      setTimeout(() => {
+        alert(
+          `分析完成！\n` +
+            `照片 ${files.length} 張（比對 ${workload.pairs.toLocaleString()} 組）\n` +
+            (reused > 0 ? `其中 ${reused} 張與其他檔案完全相同，已直接沿用分析結果\n` : '') +
+            `符合門檻 ${matches.length} 組${matches.length > MAX_RESULTS ? `（清單保留前 ${MAX_RESULTS} 組）` : ''}`
+        );
+      }, 100);
+    } catch (error) {
+      if ((error as Error).message === '已停止') {
+        setNotice('已停止分析。');
+        return;
+      }
+      console.error(error);
+      setApiError(`⚠️ 分析失敗：${(error as Error).message}`);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
-  /** 取得單張圖片的 384 維特徵向量（含快取） */
-  const embedFile = async (extractor: any, file: File): Promise<Float32Array> => {
-    const cached = embeddingCache.current.get(file);
-    if (cached) return cached;
+  /* ---------------------- 篩選與統計 ---------------------- */
 
-    const dataUrl = await fileToJpegDataUrl(file, DINO_INPUT_SIDE, 0.92);
-    const out = await extractor(dataUrl);
-    const dims: number[] = Array.from(out.dims ?? [0, 0, 0]);
-    const hidden = dims[dims.length - 1] || 384;
-    const cls = new Float32Array(out.data.slice(0, hidden));
-    embeddingCache.current.set(file, cls);
-    return cls;
+  const filteredResults = useMemo(() => {
+    if (selectedRanges.size === 0) return results;
+    return results.filter((r) => {
+      const score = primaryScore(r);
+      return [...selectedRanges].some((key) => {
+        const c = RANGE_CONFIG.find((x) => x.key === key);
+        return c ? score >= c.min && score < c.max : false;
+      });
+    });
+  }, [results, selectedRanges]);
+
+  useEffect(() => setVisibleCount(PAGE_SIZE), [selectedRanges]);
+
+  const stats = useMemo(() => {
+    const acc: Record<string, number> = {};
+    RANGE_CONFIG.forEach((c) => (acc[c.key] = 0));
+    results.forEach((r) => {
+      const score = primaryScore(r);
+      const c = RANGE_CONFIG.find((x) => score >= x.min && score < x.max);
+      if (c) acc[c.key]++;
+    });
+    return acc;
+  }, [results]);
+
+  const toggleRangeFilter = (key: string) => {
+    setSelectedRanges((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const removeResult = (id: string, e: MouseEvent) => {
+    e.stopPropagation();
+    setResults((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const deleteBelowThreshold = () => {
+    if (results.length === 0) return alert('目前無資料可刪除。');
+    const toDelete = results.filter((r) => primaryScore(r) < deleteThreshold).length;
+    if (toDelete === 0) {
+      return alert(`目前清單中沒有相似度低於 ${deleteThreshold}% 的資料，因此無須刪除。`);
+    }
+    setResults((prev) => prev.filter((r) => primaryScore(r) >= deleteThreshold));
+    setSelectedRanges(new Set());
+    setTimeout(() => {
+      alert(`刪除完成！\n已刪除 ${toDelete} 筆資料。`);
+    }, 100);
   };
 
   /* ---------------------- OpenRouter 文字生成 ---------------------- */
@@ -435,7 +649,7 @@ const App = () => {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiKey.trim()}`,
             'HTTP-Referer': window.location.href,
-            'X-Title': 'original-tools / 工程照片 AI 交叉稽核系統',
+            'X-Title': 'original-tools / 工程照片交叉稽核系統',
           },
           body: JSON.stringify(body),
         });
@@ -489,286 +703,17 @@ const App = () => {
     throw lastError;
   };
 
-  /* ---------------------- 資料夾操作 ---------------------- */
-
-  const addFolder = (e: ChangeEvent<HTMLInputElement>) => {
-    const picked = e.target.files;
-    if (!picked || picked.length === 0) return;
-
-    const newFiles = Array.from(picked).filter((f) => f.type.startsWith('image/'));
-    if (newFiles.length === 0) {
-      alert('此資料夾內沒有可用的圖片檔（支援 JPG / PNG / WebP 等）。');
-      e.target.value = '';
-      return;
-    }
-
-    const relativePath = (newFiles[0] as File & { webkitRelativePath?: string }).webkitRelativePath;
-    const folderName = relativePath ? relativePath.split('/')[0] : `資料夾 ${folders.length + 1}`;
-
-    setFolders((prev) => [...prev, { id: Date.now(), name: folderName, files: newFiles }]);
-    e.target.value = '';
-  };
-
-  const removeFolder = (id: number) => setFolders((prev) => prev.filter((f) => f.id !== id));
-
-  /* ---------------------- Step 0：像素初篩 ---------------------- */
-
-  const startCrossAnalysis = async () => {
-    if (folders.length < 2) {
-      alert('請至少加入兩個資料夾以進行交叉比對');
-      return;
-    }
-
-    setIsProcessing(true);
-    setResults([]);
-    setFilteredResults([]);
-    setSelectedRanges(new Set());
-    setApiError(null);
-
-    try {
-      const totalFiles = folders.reduce((acc, f) => acc + f.files.length, 0);
-      setProgress({ current: 0, total: totalFiles, status: '正在建立圖片特徵索引...' });
-
-      const samples: Record<number, Array<{ file: File; sample: PixelSample }>> = {};
-      let processed = 0;
-
-      for (const folder of folders) {
-        samples[folder.id] = [];
-        for (const file of folder.files) {
-          try {
-            samples[folder.id].push({ file, sample: await sampleImage(file) });
-          } catch (err) {
-            console.warn('略過無法讀取的圖片', file.name, err);
-          }
-          processed++;
-          setProgress({ current: processed, total: totalFiles, status: `讀取特徵：${folder.name}` });
-        }
-      }
-
-      const detected: MatchItem[] = [];
-      let done = 0;
-      let total = 0;
-      for (let i = 0; i < folders.length; i++) {
-        for (let j = i + 1; j < folders.length; j++) {
-          total += folders[i].files.length * folders[j].files.length;
-        }
-      }
-
-      for (let i = 0; i < folders.length; i++) {
-        for (let j = i + 1; j < folders.length; j++) {
-          const folderA = folders[i];
-          const folderB = folders[j];
-
-          for (const a of samples[folderA.id] ?? []) {
-            for (const b of samples[folderB.id] ?? []) {
-              done++;
-              if (done % 100 === 0) {
-                setProgress({
-                  current: done,
-                  total,
-                  status: `正在交叉比對：${folderA.name} vs ${folderB.name}`,
-                });
-                await sleep(0);
-              }
-
-              const similarity = calculateSimilarity(a.sample, b.sample);
-              if (similarity >= threshold) {
-                detected.push({
-                  id: `${folderA.id}-${folderB.id}-${a.file.name}-${b.file.name}`,
-                  similarity: Number(similarity.toFixed(2)),
-                  fileA: a.file,
-                  fileB: b.file,
-                  sourceA: folderA.name,
-                  sourceB: folderB.name,
-                  aiScore: null,
-                  aiAnalysis: null,
-                  analysisSource: null,
-                });
-              }
-            }
-          }
-        }
-      }
-
-      detected.sort((a, b) => b.similarity - a.similarity);
-      setResults(detected);
-      alert(`交叉比對分析完成！共發現 ${detected.length} 組相似照片。`);
-    } catch (error) {
-      console.error(error);
-      alert('分析失敗：' + (error as Error).message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  /* ---------------------- Step 1：像素刪除 ---------------------- */
-
-  const deleteLowPixelSimilarity = () => {
-    if (results.length === 0) return alert('目前無任何對照組資料可刪除。');
-
-    const toDelete = results.filter((r) => r.similarity < pixelDeleteThreshold).length;
-    if (toDelete === 0) {
-      return alert(`目前清單中沒有像素相似度「低於 ${pixelDeleteThreshold}%」的資料，因此無須刪除。`);
-    }
-
-    const next = results.filter((r) => r.similarity >= pixelDeleteThreshold);
-    setResults(next);
-    setSelectedRanges(new Set());
-    setFilteredResults(next);
-
-    setTimeout(() => {
-      alert(`刪除完成！\n已刪除 ${toDelete} 筆資料。\n剩餘 ${next.length} 筆資料（已更新至下方列表）。`);
-    }, 100);
-  };
-
-  /* ---------------------- 篩選與統計 ---------------------- */
-
-  useEffect(() => {
-    if (results.length === 0) {
-      setFilteredResults([]);
-      return;
-    }
-    if (selectedRanges.size === 0) {
-      setFilteredResults(results);
-      return;
-    }
-    setFilteredResults(
-      results.filter((r) =>
-        [...selectedRanges].some((key) => {
-          const c = RANGE_CONFIG.find((x) => x.key === key);
-          return c ? r.similarity >= c.min && r.similarity < c.max : false;
-        })
-      )
-    );
-  }, [results, selectedRanges]);
-
-  const stats = (() => {
-    const acc: Record<string, number> = {};
-    RANGE_CONFIG.forEach((c) => (acc[c.key] = 0));
-    results.forEach((r) => {
-      const c = RANGE_CONFIG.find((x) => r.similarity >= x.min && r.similarity < x.max);
-      if (c) acc[c.key]++;
-    });
-    return acc;
-  })();
-
-  const toggleRangeFilter = (key: string) => {
-    setSelectedRanges((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  };
-
-  const removeResult = (id: string, e: MouseEvent) => {
-    e.stopPropagation();
-    setResults((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  /* ---------------------- Step 2-1：DINOv2 相似度 ---------------------- */
-
-  const runStep2_1_DinoScore = async () => {
-    const targets = results.filter((r) => r.aiScore === null);
-    if (targets.length === 0) return alert('目前清單中的所有項目皆已完成相似度分析。');
-
-    setIsScoring(true);
-    setApiError(null);
-    setScoreProgress({ done: 0, total: targets.length, label: '載入模型...' });
-
-    try {
-      const extractor = await ensureExtractor();
-
-      // 只對「唯一的圖片」推論一次
-      const seen = new Set<File>();
-      const unique: File[] = [];
-      targets.forEach((t) =>
-        [t.fileA, t.fileB].forEach((f) => {
-          if (!seen.has(f)) {
-            seen.add(f);
-            unique.push(f);
-          }
-        })
-      );
-
-      const embeddings = new Map<File, Float32Array>();
-      for (let i = 0; i < unique.length; i++) {
-        setScoreProgress({
-          done: i,
-          total: unique.length,
-          label: `建立特徵向量 ${i + 1} / ${unique.length}`,
-        });
-        try {
-          embeddings.set(unique[i], await embedFile(extractor, unique[i]));
-        } catch (err) {
-          console.warn('特徵抽取失敗', unique[i].name, err);
-        }
-        if (i % 5 === 4) await sleep(0); // 讓 UI 有機會更新
-      }
-
-      const scores = new Map<string, number>();
-      for (const t of targets) {
-        const a = embeddings.get(t.fileA);
-        const b = embeddings.get(t.fileB);
-        if (!a || !b) continue;
-        const cos = cosineSimilarity(a, b);
-        scores.set(t.id, clamp(Math.round(cos * 1000) / 10, 0, 100));
-      }
-
-      setResults((prev) =>
-        prev.map((r) => (scores.has(r.id) ? { ...r, aiScore: scores.get(r.id)!, analysisSource: 'dino' } : r))
-      );
-
-      const done = scores.size;
-      setTimeout(() => {
-        alert(
-          `DINOv2 相似度分析完成！\n已評分 ${done} 組` +
-            (done < targets.length ? `（${targets.length - done} 組因圖片讀取失敗略過）` : '') +
-            '。'
-        );
-      }, 100);
-    } catch (error) {
-      console.error(error);
-      setApiError(`⚠️ ${(error as Error).message}`);
-    } finally {
-      setIsScoring(false);
-      setScoreProgress({ done: 0, total: 0, label: '' });
-    }
-  };
-
-  /* ---------------------- Step 2-2：依分數刪除 ---------------------- */
-
-  const runStep2_2_DeleteLowAi = () => {
-    if (!results.some((r) => r.aiScore !== null)) {
-      return alert('尚未進行相似度分析（Step 2-1），系統無法判斷哪些需要刪除。\n\n請先點擊「1. 相似度分析」。');
-    }
-
-    const toDelete = results.filter((r) => r.aiScore !== null && r.aiScore < aiDeleteThreshold).length;
-    if (toDelete === 0) {
-      return alert(`目前沒有相似度低於 ${aiDeleteThreshold}% 的項目，因此無須刪除。`);
-    }
-
-    setResults((prev) => prev.filter((r) => r.aiScore === null || r.aiScore >= aiDeleteThreshold));
-
-    setTimeout(() => {
-      alert(`篩選刪除完成！\n已刪除 ${toDelete} 筆資料。`);
-    }, 100);
-  };
-
-  /* ---------------------- Step 3：差異說明與結論 ---------------------- */
-
-  const runStep3_GenerateText = async () => {
+  const runGenerateText = async () => {
     if (results.length === 0) return alert('無資料可分析');
 
-    const targets = results.filter((r) => r.aiAnalysis === null);
-    if (targets.length === 0) return alert('目前清單所有項目皆已包含詳細分析內容。');
+    const targets = results.filter((r) => r.analysis === null);
+    if (targets.length === 0) return alert('目前清單所有項目皆已包含差異說明。');
 
     const useAi = apiKey.trim().length > 0 && topN > 0;
-    const ranked = [...targets].sort(
-      (a, b) => (b.aiScore ?? b.similarity) - (a.aiScore ?? a.similarity)
-    );
+    const ranked = [...targets].sort((a, b) => primaryScore(b) - primaryScore(a));
     const aiIds = new Set(useAi ? ranked.slice(0, topN).map((t) => t.id) : []);
 
-    setAnalyzingAiIds(new Set(aiIds));
+    setAnalyzingIds(new Set(aiIds));
     setApiError(null);
 
     let aiDone = 0;
@@ -780,16 +725,16 @@ const App = () => {
       if (!aiIds.has(item.id)) {
         const text = buildRuleText(item);
         setResults((prev) =>
-          prev.map((r) => (r.id === item.id ? { ...r, aiAnalysis: text, analysisSource: 'rule' } : r))
+          prev.map((r) => (r.id === item.id ? { ...r, analysis: text, analysisSource: 'rule' } : r))
         );
         ruleDone++;
         continue;
       }
 
       const scoreInfo =
-        item.aiScore !== null
-          ? `前一步 DINOv2 特徵相似度為 ${item.aiScore}%、像素相似度為 ${item.similarity}%（僅供參考，仍請以實際看到的内容為準）。`
-          : '尚未評分，請自行判斷兩張照片的視覺相似程度。';
+        item.dino !== null
+          ? `前一步 DINOv2 特徵相似度為 ${item.dino}%、像素相似度為 ${item.pixel}%（僅供參考，仍請以實際看到的內容為準）。`
+          : `像素相似度為 ${item.pixel}%（未取得 DINOv2 特徵），僅供參考，仍請以實際看到的內容為準。`;
 
       const prompt = `你是專業工程稽核員。第一張圖為 A 組（${item.sourceA}），第二張圖為 B 組（${item.sourceB}）。
 ${scoreInfo}
@@ -803,7 +748,7 @@ ${scoreInfo}
       try {
         const text = await callOpenRouter(prompt, item);
         setResults((prev) =>
-          prev.map((r) => (r.id === item.id ? { ...r, aiAnalysis: text, analysisSource: 'ai' } : r))
+          prev.map((r) => (r.id === item.id ? { ...r, analysis: text, analysisSource: 'ai' } : r))
         );
         aiDone++;
       } catch (error) {
@@ -814,17 +759,16 @@ ${scoreInfo}
           aborted = true;
           break;
         }
-        // 單筆失敗改用規則文字，避免報告留白
         const fallback = buildRuleText(item);
         setResults((prev) =>
-          prev.map((r) => (r.id === item.id ? { ...r, aiAnalysis: fallback, analysisSource: 'rule' } : r))
+          prev.map((r) => (r.id === item.id ? { ...r, analysis: fallback, analysisSource: 'rule' } : r))
         );
         ruleDone++;
       }
       await sleep(REQUEST_GAP_MS);
     }
 
-    setAnalyzingAiIds(new Set());
+    setAnalyzingIds(new Set());
     if (aborted) return;
     alert(
       `差異說明與結論生成完成！\n` +
@@ -834,25 +778,30 @@ ${scoreInfo}
     );
   };
 
-  /* ---------------------- Step 4：匯出 Word ---------------------- */
+  /* ---------------------- 匯出 Word ---------------------- */
 
   const exportToWord = async () => {
     if (results.length === 0) return alert('無資料可匯出。');
 
-    const incomplete = results.filter((r) => !r.aiAnalysis).length;
+    const incomplete = results.filter((r) => !r.analysis).length;
     if (incomplete > 0) {
       const ok = window.confirm(
-        `尚有 ${incomplete} 筆項目未生成詳細說明（Step 3）。\n這些項目在報告中將無文字分析。確定要繼續匯出嗎？`
+        `尚有 ${incomplete} 筆項目未生成差異說明。\n這些項目在報告中將無文字分析。確定要繼續匯出嗎？`
       );
       if (!ok) return;
     }
 
     setIsExporting(true);
     try {
-      const title = '工程照片 AI 完整查核報告';
-      const engine = apiKey.trim()
-        ? `DINOv2-small（本機）＋ OpenRouter ${model}`
-        : 'DINOv2-small（本機）＋ 規則判定';
+      const title = '工程照片完整查核報告';
+      const engine =
+        modelState === 'ready' && results.some((r) => r.dino !== null)
+          ? apiKey.trim()
+            ? `DINOv2-small（本機）＋ OpenRouter ${model}`
+            : 'DINOv2-small（本機）＋ 規則判定'
+          : apiKey.trim()
+          ? `像素比對 ＋ OpenRouter ${model}`
+          : '像素比對 ＋ 規則判定';
 
       let html = `
         <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -884,9 +833,12 @@ ${scoreInfo}
 
       for (let i = 0; i < results.length; i++) {
         const item = results[i];
-        const [dataUrlA, dataUrlB] = await Promise.all([fileToDataURL(item.fileA), fileToDataURL(item.fileB)]);
-        const displayScore = item.aiScore !== null ? item.aiScore : item.similarity;
-        const scoreLabel = item.aiScore !== null ? 'DINOv2 特徵相似度' : '像素初判相似度';
+        const [imgA, imgB] = await Promise.all([
+          fileToJpegDataUrl(item.fileA, REPORT_MAX_SIDE, 0.8),
+          fileToJpegDataUrl(item.fileB, REPORT_MAX_SIDE, 0.8),
+        ]);
+        const displayScore = primaryScore(item);
+        const scoreLabel = item.dino !== null ? 'DINOv2 特徵相似度' : '像素相似度';
         const sourceLabel =
           item.analysisSource === 'ai' ? '（AI 撰寫）' : item.analysisSource === 'rule' ? '（規則判定）' : '';
 
@@ -897,7 +849,7 @@ ${scoreInfo}
                 <td style="border: none; width: 55%;"><h3 style="margin:0;">#${i + 1} 稽核群組</h3></td>
                 <td style="border: none; text-align: right;">
                   <span class="score-box">${scoreLabel}：${displayScore}%</span><br/>
-                  <span class="meta">像素相似度：${item.similarity}%</span>
+                  <span class="meta">像素相似度：${item.pixel}%</span>
                 </td>
               </tr>
             </table>
@@ -908,14 +860,14 @@ ${scoreInfo}
                 <th style="width: 50%;">B：${item.sourceB}（${item.fileB.name}）</th>
               </tr>
               <tr>
-                <td class="img-container"><img src="${dataUrlA}" /></td>
-                <td class="img-container"><img src="${dataUrlB}" /></td>
+                <td class="img-container"><img src="${imgA}" /></td>
+                <td class="img-container"><img src="${imgB}" /></td>
               </tr>
             </table>
 
             <div class="ai-section">
               <span class="ai-title">【查核結果】${sourceLabel}</span>
-              ${item.aiAnalysis ? item.aiAnalysis.replace(/\n/g, '<br/>') : '<i>（無詳細分析文字）</i>'}
+              ${item.analysis ? item.analysis.replace(/\n/g, '<br/>') : '<i>（無差異說明文字）</i>'}
             </div>
           </div>`;
       }
@@ -942,11 +894,12 @@ ${scoreInfo}
   /* ------------------------------ UI ------------------------------ */
 
   const hasKey = apiKey.trim().length > 0;
+  const percent = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
   const dinoBadge = (() => {
-    if (dinoState === 'ready') return { text: '已就緒', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-    if (dinoState === 'loading') return { text: `下載中 ${dinoProgress}%`, cls: 'bg-blue-50 text-blue-700 border-blue-200' };
-    if (dinoState === 'error') return { text: '載入失敗', cls: 'bg-red-50 text-red-700 border-red-200' };
+    if (modelState === 'ready') return { text: '已就緒', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    if (modelState === 'loading') return { text: `下載模型 ${modelProgress}%`, cls: 'bg-blue-50 text-blue-700 border-blue-200' };
+    if (modelState === 'error') return { text: '模型不可用', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
     return { text: '待命（首次約 23MB）', cls: 'bg-slate-100 text-slate-600 border-slate-200' };
   })();
 
@@ -960,10 +913,10 @@ ${scoreInfo}
             <div>
               <h1 className="text-2xl font-bold text-blue-700 flex items-center gap-2">
                 <FileImage className="w-8 h-8" />
-                工程照片 AI 交叉稽核系統
+                工程照片交叉稽核系統
               </h1>
               <p className="text-xs text-slate-500 mt-1">
-                像素初篩 → DINOv2 特徵比對（免金鑰）→ 差異說明 → Word 查核報告
+                一次分析（像素＋DINOv2 特徵，免金鑰）→ 差異說明 → Word 查核報告
               </p>
             </div>
             <a
@@ -980,16 +933,17 @@ ${scoreInfo}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg p-3">
             <div className="flex items-center gap-2 shrink-0">
               <Cpu className="w-4 h-4 text-slate-600" />
-              <span className="text-sm font-semibold text-slate-700">相似度引擎</span>
+              <span className="text-sm font-semibold text-slate-700">影像引擎</span>
               <span className={`text-[11px] px-2 py-0.5 rounded-full border ${dinoBadge.cls}`}>{dinoBadge.text}</span>
             </div>
             <div className="text-xs text-slate-500 flex-1">
-              DINOv2-small（{DINO_MODEL_ID}）在你的瀏覽器本機執行，<span className="font-semibold text-slate-700">免 API Key、免費用、照片不外傳</span>。
+              DINOv2-small（{DINO_MODEL_ID}）在<span className="font-semibold text-slate-700">背景執行緒</span>本機執行，
+              <span className="font-semibold text-slate-700">免 API Key、照片不外傳、操作不卡頓</span>。
               首次分析需下載約 23MB 模型，之後由瀏覽器快取。
             </div>
-            {dinoState === 'loading' && (
+            {modelState === 'loading' && (
               <div className="w-32 h-2 bg-slate-200 rounded-full overflow-hidden shrink-0">
-                <div className="h-full bg-blue-600 transition-all" style={{ width: `${dinoProgress}%` }} />
+                <div className="h-full bg-blue-600 transition-all" style={{ width: `${modelProgress}%` }} />
               </div>
             )}
           </div>
@@ -1060,8 +1014,8 @@ ${scoreInfo}
           <p className="flex items-start gap-1.5 text-xs text-slate-500">
             <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>
-              金鑰只存在你自己的瀏覽器（localStorage），請求由瀏覽器直接送往 OpenRouter，本工具不經手任何資料。
-              未填金鑰時，第三步改用「DINOv2 分數 + 像素分數」規則模板產生差異說明與結論，報告格式完全相同。
+              評分完全在本機完成；金鑰只存在你自己的瀏覽器（localStorage），且唯有填寫時才會把前 N 組的縮圖送往 OpenRouter。
+              未填金鑰時改用「DINOv2 分數 + 像素分數」規則模板產生差異說明與結論，報告格式完全相同。
             </span>
           </p>
         </header>
@@ -1073,20 +1027,29 @@ ${scoreInfo}
           </div>
         )}
 
-        {dinoState === 'error' && dinoError && (
+        {notice && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg flex items-start gap-2 text-sm">
+            <Info className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>{notice}</span>
+          </div>
+        )}
+
+        {modelState === 'error' && modelError && (
           <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex items-start gap-2 text-sm">
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
             <span>
-              DINOv2 模型載入失敗：{dinoError}
+              DINOv2 模型載入失敗，已自動改為「像素比對」模式（功能仍可用，但無法辨識裁切／調色後的重複照片）。
               <br />
-              常見原因：網路無法連線 huggingface.co（公司或政府內網封鎖）、瀏覽器阻擋 WebAssembly。可先用第一步像素比對。
+              原因：{modelError}
+              <br />
+              常見原因：內網封鎖 huggingface.co、瀏覽器阻擋 WebAssembly。
             </span>
           </div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-          {/* 左側：資料夾與初判設定 */}
+          {/* 左側：資料夾與設定 */}
           <div className="lg:col-span-3 space-y-4">
             <div className="bg-white p-5 rounded-lg shadow-sm border border-slate-200 h-full flex flex-col">
               <div className="flex justify-between items-center mb-4">
@@ -1108,7 +1071,7 @@ ${scoreInfo}
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto min-h-[200px] space-y-2 pr-2 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto min-h-[200px] max-h-[300px] space-y-2 pr-2 custom-scrollbar">
                 {folders.length === 0 && (
                   <p className="text-xs text-slate-400 text-center py-8 leading-relaxed">
                     點「加入」選擇整個資料夾
@@ -1140,29 +1103,60 @@ ${scoreInfo}
                 ))}
               </div>
 
-              <div className="mt-4 pt-4 border-t border-slate-100">
-                <div className="flex justify-between text-sm mb-1">
-                  <span>初始比對門檻</span>
-                  <span className="font-bold text-blue-600">{threshold}%</span>
+              <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>列出門檻（低於此值不顯示）</span>
+                    <span className="font-bold text-blue-600">{listThreshold}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="60"
+                    max="99"
+                    value={listThreshold}
+                    onChange={(e) => setListThreshold(Number(e.target.value))}
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  />
                 </div>
-                <input
-                  type="range"
-                  min="30"
-                  max="100"
-                  value={threshold}
-                  onChange={(e) => setThreshold(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                />
+
+                <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded p-2 leading-relaxed">
+                  照片 <span className="font-bold text-slate-700">{workload.unique}</span> 張
+                  （比對 <span className="font-bold text-slate-700">{workload.pairs.toLocaleString()}</span> 組）
+                  {workload.unique > 0 && (
+                    <>
+                      <br />
+                      預估約 {Math.max(1, Math.ceil(workload.unique * 0.5))} 秒
+                      {modelState !== 'ready' && '（不含首次模型下載）'}
+                    </>
+                  )}
+                </div>
 
                 <button
-                  onClick={() => void startCrossAnalysis()}
-                  disabled={isProcessing || folders.length < 2}
-                  className="mt-4 w-full py-2.5 rounded-lg font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 flex items-center justify-center gap-2 transition-all"
+                  onClick={() => void runAnalysis()}
+                  disabled={isAnalyzing || folders.length < 2}
+                  className="w-full py-2.5 rounded-lg font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 flex items-center justify-center gap-2 transition-all"
                 >
-                  {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                  開始交叉比對
+                  {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                  {isAnalyzing ? '分析中…' : '開始分析'}
                 </button>
-                {isProcessing && <p className="text-xs text-center text-slate-500 mt-2">{progress.status}</p>}
+
+                {isAnalyzing && (
+                  <button
+                    onClick={stopAnalysis}
+                    className="w-full py-2 rounded-lg font-bold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 flex items-center justify-center gap-2"
+                  >
+                    <StopCircle className="w-4 h-4" /> 停止
+                  </button>
+                )}
+
+                {isAnalyzing && progress.total > 0 && (
+                  <div className="space-y-1">
+                    <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-600 transition-all" style={{ width: `${percent}%` }} />
+                    </div>
+                    <p className="text-[11px] text-slate-500 text-center">{progress.stage}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1170,29 +1164,31 @@ ${scoreInfo}
           {/* 右側：主工作區 */}
           <div className="lg:col-span-9 space-y-5">
 
-            {/* 第一步：像素統計 & 刪除 */}
+            {/* 分數分佈 */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 pb-2 border-b border-slate-100 gap-3">
                 <div className="flex items-center gap-2 text-slate-800 font-bold text-lg">
                   <BarChart3 className="w-6 h-6 text-orange-500" />
-                  第一步：像素相似度篩選
+                  相似度分佈
+                  <span className="text-xs font-normal text-slate-500">（點卡片可篩選）</span>
                 </div>
 
                 <div className="flex items-center gap-2 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100">
-                  <span className="text-xs font-bold text-orange-800">刪除像素相似度低於</span>
+                  <span className="text-xs font-bold text-orange-800">刪除低於</span>
                   <input
                     type="range"
-                    min="0"
-                    max="100"
-                    step="5"
-                    value={pixelDeleteThreshold}
-                    onChange={(e) => setPixelDeleteThreshold(Number(e.target.value))}
+                    min="60"
+                    max="99"
+                    step="1"
+                    value={deleteThreshold}
+                    onChange={(e) => setDeleteThreshold(Number(e.target.value))}
                     className="w-24 h-2 bg-white rounded-lg appearance-none cursor-pointer accent-orange-600 border border-orange-200"
                   />
-                  <span className="text-sm font-bold text-orange-700 w-9 text-right">{pixelDeleteThreshold}%</span>
+                  <span className="text-sm font-bold text-orange-700 w-9 text-right">{deleteThreshold}%</span>
                   <button
-                    onClick={deleteLowPixelSimilarity}
-                    className="ml-2 bg-white text-orange-600 hover:bg-orange-100 border border-orange-200 px-3 py-1.5 rounded text-xs flex items-center gap-1 font-bold transition-colors shadow-sm"
+                    onClick={deleteBelowThreshold}
+                    disabled={results.length === 0}
+                    className="ml-2 bg-white text-orange-600 hover:bg-orange-100 border border-orange-200 px-3 py-1.5 rounded text-xs flex items-center gap-1 font-bold transition-colors shadow-sm disabled:opacity-40"
                     title="執行刪除"
                   >
                     <Eraser className="w-3 h-3" /> 執行刪除
@@ -1214,9 +1210,9 @@ ${scoreInfo}
                       }`}
                     >
                       {active && <CheckCircle className="absolute top-1 right-1 w-4 h-4 text-blue-600" />}
-                      <div className={`text-xs font-bold uppercase ${config.color} mb-1`}>{config.label}</div>
+                      <div className={`text-xs font-bold ${config.color} mb-1`}>{config.label}</div>
                       <div className="flex justify-between items-end">
-                        <span className="text-2xl font-bold text-slate-700">{stats[config.key]}</span>
+                        <span className="text-2xl font-bold text-slate-700">{stats[config.key] ?? 0}</span>
                         <span className="text-xs text-slate-400 mb-1">組</span>
                       </div>
                     </button>
@@ -1225,54 +1221,7 @@ ${scoreInfo}
               </div>
             </div>
 
-            {/* 第二步：DINOv2 篩選 */}
-            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-lg flex flex-col md:flex-row items-start md:items-center gap-4">
-              <div className="flex items-center gap-2 shrink-0 self-start md:self-center">
-                <Zap className="w-6 h-6 text-indigo-600" />
-                <div className="flex flex-col">
-                  <span className="font-bold text-indigo-900 text-lg">第二步：DINOv2 相似度篩選</span>
-                  <span className="text-xs text-indigo-500">本機執行，免金鑰</span>
-                </div>
-              </div>
-
-              <div className="flex-1 w-full flex flex-col md:flex-row gap-3">
-                <button
-                  onClick={() => void runStep2_1_DinoScore()}
-                  disabled={results.length === 0 || isScoring}
-                  className="flex-1 bg-white border border-indigo-200 text-indigo-700 px-4 py-3 rounded-lg font-bold shadow-sm hover:bg-indigo-50 flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
-                >
-                  {isScoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanSearch className="w-4 h-4" />}
-                  {isScoring && scoreProgress.label ? scoreProgress.label : '1. 相似度分析'}
-                </button>
-
-                <div className="flex-[1.5] flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-red-100 shadow-sm">
-                  <div className="flex flex-col leading-tight shrink-0 mr-1">
-                    <span className="text-xs font-bold text-slate-500">2. 指定刪除</span>
-                    <span className="text-xs font-bold text-red-600">相似度低於</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={aiDeleteThreshold}
-                    onChange={(e) => setAiDeleteThreshold(Number(e.target.value))}
-                    className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-500"
-                  />
-                  <div className="text-sm font-bold text-red-600 w-9 text-right">{aiDeleteThreshold}%</div>
-                  <button
-                    onClick={runStep2_2_DeleteLowAi}
-                    disabled={results.length === 0}
-                    className="ml-2 p-2 bg-red-50 text-red-600 rounded hover:bg-red-100 border border-red-200 disabled:opacity-40"
-                    title="執行刪除"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* 第三步 / 第四步 */}
+            {/* 說明 / 匯出 / 清單 */}
             <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
               <div className="bg-slate-50 p-3 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-3">
                 <div className="flex items-center gap-2">
@@ -1285,16 +1234,16 @@ ${scoreInfo}
 
                 <div className="flex items-center gap-2 w-full md:w-auto">
                   <button
-                    onClick={() => void runStep3_GenerateText()}
-                    disabled={results.length === 0 || analyzingAiIds.size > 0}
+                    onClick={() => void runGenerateText()}
+                    disabled={results.length === 0 || analyzingIds.size > 0}
                     className="flex-1 md:flex-none text-xs bg-emerald-600 text-white px-3 py-2 rounded font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1 shadow-sm disabled:opacity-50"
                   >
-                    {analyzingAiIds.size > 0 ? (
+                    {analyzingIds.size > 0 ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
                     ) : (
                       <FileCheck className="w-3 h-3" />
                     )}
-                    第三步：差異說明及結論{hasKey && topN > 0 ? `（前 ${topN} 組用 AI）` : '（規則模板）'}
+                    產生差異說明及結論{hasKey && topN > 0 ? `（前 ${topN} 組用 AI）` : '（規則模板）'}
                   </button>
 
                   <div className="h-6 w-[1px] bg-slate-300 mx-1" />
@@ -1305,12 +1254,12 @@ ${scoreInfo}
                     className="flex-1 md:flex-none text-xs bg-blue-600 text-white px-3 py-2 rounded font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-1 shadow-sm disabled:opacity-50"
                   >
                     {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardList className="w-3 h-3" />}
-                    第四步：匯出 WORD 報告
+                    匯出 WORD 報告
                   </button>
                 </div>
               </div>
 
-              <div className="p-4 space-y-3 h-[450px] overflow-y-auto custom-scrollbar bg-slate-50/50">
+              <div className="p-4 space-y-3 h-[520px] overflow-y-auto custom-scrollbar bg-slate-50/50">
                 {filteredResults.length === 0 && (
                   <div className="h-full flex flex-col items-center justify-center text-slate-400">
                     <FileImage className="w-16 h-16 mb-3 opacity-20" />
@@ -1318,7 +1267,7 @@ ${scoreInfo}
                   </div>
                 )}
 
-                {filteredResults.map((item) => (
+                {filteredResults.slice(0, visibleCount).map((item) => (
                   <div
                     key={item.id}
                     className="relative bg-white rounded-lg border border-slate-200 p-3 hover:shadow-md transition-all flex flex-col sm:flex-row gap-4 group"
@@ -1337,22 +1286,22 @@ ${scoreInfo}
                           A: {item.sourceA}
                         </div>
                         <div className="aspect-video bg-slate-100 rounded border border-slate-200 overflow-hidden">
-                          <img src={fileUrl(item.fileA)} className="w-full h-full object-contain" alt="" />
+                          <img src={item.thumbA} className="w-full h-full object-contain" alt="" loading="lazy" />
                         </div>
                       </div>
 
                       <div className="flex flex-col items-center justify-center w-20 shrink-0">
-                        <div className="text-[10px] text-slate-400">像素</div>
-                        <div className="text-base font-bold text-slate-600">{item.similarity}%</div>
-                        <div className="w-8 h-[1px] bg-slate-200 my-1" />
                         <div className="text-[10px] text-indigo-400">DINOv2</div>
-                        {item.aiScore !== null ? (
-                          <div className={`text-lg font-black ${item.aiScore >= 95 ? 'text-red-600' : 'text-indigo-600'}`}>
-                            {item.aiScore}%
+                        {item.dino !== null ? (
+                          <div className={`text-lg font-black ${item.dino >= 95 ? 'text-red-600' : 'text-indigo-600'}`}>
+                            {item.dino}%
                           </div>
                         ) : (
                           <span className="text-xs text-slate-300">--</span>
                         )}
+                        <div className="w-8 h-[1px] bg-slate-200 my-1" />
+                        <div className="text-[10px] text-slate-400">像素</div>
+                        <div className="text-sm font-bold text-slate-600">{item.pixel}%</div>
                       </div>
 
                       <div className="flex-1 space-y-1 min-w-0">
@@ -1360,28 +1309,38 @@ ${scoreInfo}
                           B: {item.sourceB}
                         </div>
                         <div className="aspect-video bg-slate-100 rounded border border-slate-200 overflow-hidden">
-                          <img src={fileUrl(item.fileB)} className="w-full h-full object-contain" alt="" />
+                          <img src={item.thumbB} className="w-full h-full object-contain" alt="" loading="lazy" />
                         </div>
                       </div>
                     </div>
 
                     <div className="sm:w-1/3 border-l border-slate-100 pl-4 flex flex-col justify-center text-xs">
-                      {item.aiAnalysis ? (
+                      {item.analysis ? (
                         <div className="bg-emerald-50 text-emerald-800 p-2.5 rounded border border-emerald-100 h-full overflow-y-auto max-h-[100px] custom-scrollbar">
                           <div className="font-bold mb-1 flex items-center gap-1">
                             <CheckCircle className="w-3 h-3" />
                             {item.analysisSource === 'ai' ? 'AI 分析結論' : '規則判定結論'}
                           </div>
-                          <div className="opacity-90 leading-relaxed whitespace-pre-line">{item.aiAnalysis}</div>
+                          <div className="opacity-90 leading-relaxed whitespace-pre-line">{item.analysis}</div>
                         </div>
                       ) : (
                         <div className="text-center text-slate-400 py-4 italic border-2 border-dashed border-slate-100 rounded">
-                          等待生成差異說明（Step 3）...
+                          尚未產生差異說明
                         </div>
                       )}
                     </div>
                   </div>
                 ))}
+
+                {filteredResults.length > visibleCount && (
+                  <button
+                    onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
+                    className="w-full py-2.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 flex items-center justify-center gap-2"
+                  >
+                    <SquareStack className="w-3.5 h-3.5" />
+                    顯示更多（還有 {filteredResults.length - visibleCount} 組）
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1405,10 +1364,10 @@ ${scoreInfo}
               <div className="flex-1 p-6 bg-slate-900 flex flex-col gap-4 overflow-y-auto">
                 <div className="flex gap-4 h-full items-center justify-center">
                   <div className="flex-1 h-full flex flex-col">
-                    <img src={fileUrl(selectedResult.fileA)} className="max-w-full max-h-full object-contain mx-auto" alt="" />
+                    <img src={fullUrl(selectedResult.fileA)} className="max-w-full max-h-full object-contain mx-auto" alt="" />
                   </div>
                   <div className="flex-1 h-full flex flex-col">
-                    <img src={fileUrl(selectedResult.fileB)} className="max-w-full max-h-full object-contain mx-auto" alt="" />
+                    <img src={fullUrl(selectedResult.fileB)} className="max-w-full max-h-full object-contain mx-auto" alt="" />
                   </div>
                 </div>
               </div>
@@ -1417,20 +1376,20 @@ ${scoreInfo}
                 <div className="flex gap-4 mb-4">
                   <div className="bg-indigo-50 p-3 rounded-lg flex-1 text-center">
                     <div className="text-xs font-bold text-indigo-800">DINOv2</div>
-                    <div className="text-2xl font-black text-indigo-600">{selectedResult.aiScore ?? 'N/A'}%</div>
+                    <div className="text-2xl font-black text-indigo-600">{selectedResult.dino ?? 'N/A'}%</div>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg flex-1 text-center">
                     <div className="text-xs font-bold text-slate-600">像素比對</div>
-                    <div className="text-2xl font-bold text-slate-500">{selectedResult.similarity}%</div>
+                    <div className="text-2xl font-bold text-slate-500">{selectedResult.pixel}%</div>
                   </div>
                 </div>
                 <div className="text-xs text-slate-500 space-y-1 mb-3">
                   <div>A：{selectedResult.sourceA} / {selectedResult.fileA.name}</div>
                   <div>B：{selectedResult.sourceB} / {selectedResult.fileB.name}</div>
                 </div>
-                {selectedResult.aiAnalysis ? (
+                {selectedResult.analysis ? (
                   <div className="bg-slate-50 p-4 rounded text-sm leading-relaxed whitespace-pre-line text-slate-700">
-                    {selectedResult.aiAnalysis}
+                    {selectedResult.analysis}
                   </div>
                 ) : (
                   <div className="text-center text-slate-400 text-sm">無詳細內容</div>
