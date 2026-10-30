@@ -21,6 +21,14 @@
 > QR 與 PDF 工具皆為純前端。遠端協助工具的靜態前端部署於 GitHub Pages，配對與短效 LiveKit 憑證由既有 Sites 後端安全提供；秘密金鑰不在本倉庫。
 > 工程照片 AI 交叉稽核為純前端，相似度判定用的 DINOv2 模型在使用者瀏覽器本機執行（背景執行緒，操作不卡頓），**免 API Key、照片不外傳**；差異說明的文字可選填 OpenRouter 金鑰（存於 localStorage），未填時改用規則模板。
 
+## 下載本機桌面版
+
+不想連網或想完全離線使用，可下載本機桌面版（Windows）：
+
+- **Release 頁面**：<https://github.com/ymguan3-boop/original-tools/releases/tag/v1.1.0>
+- 下載 `desktop-release.zip`（約 25MB），解壓縮後雙擊 `start.bat` 即可。
+- 需要 Python 3.8+，模型已內建，完全離線。
+
 ## 倉庫結構
 
 ```

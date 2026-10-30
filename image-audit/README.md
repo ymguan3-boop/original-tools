@@ -92,3 +92,13 @@ npm run build    # 產出 dist/
 ## 授權
 
 MIT
+
+
+## 本機桌面版（離線）
+
+不想連網或想完全離線使用，可下載本機桌面版：
+
+- Release：https://github.com/ymguan3-boop/original-tools/releases/tag/v1.1.0
+- 下載 \desktop-release.zip\（約 25MB），解壓縮後雙擊 \start.bat\ 即可。
+- 需要 Python 3.8+，模型已內建，完全離線。
+
