@@ -16,6 +16,7 @@
 | **PDF 轉語音影片模組** | 匯入 PDF 自動偵測底線段落，中文語音逐段朗讀 + 黃色高亮字幕，錄製為 WebM 影片 | [開啟](https://ymguan3-boop.github.io/original-tools/pdf-voice-video/) | [pdf-voice-video](https://github.com/ymguan3-boop/pdf-voice-video) |
 | **手機遠端協助工作台** | 4 位數配對、手機鏡頭、雙向語音、文字訊息及即時畫面標記 | [開啟](https://ymguan3-boop.github.io/original-tools/mobile-remote-assist/) | 本倉庫 `mobile-remote-assist/` |
 | **工程照片 AI 交叉稽核系統** | 多資料夾交叉比對工程照片，一次分析即完成 DINOv2 本機特徵評分，判定重複請款風險，產生差異說明並匯出 Word 查核報告 | [開啟](https://ymguan3-boop.github.io/original-tools/image-audit/) | 本倉庫 `image-audit/` |
+| **工程照片稽核 — 本機桌面版** | 同上，但打包為可離線執行的桌面版：雙擊 `start.bat` 即啟動本機伺服器並開啟瀏覽器，模型內建不需下載，完全離線 | 解壓縮 `desktop/` 後雙擊 `start.bat` | 本倉庫 `desktop/` |
 
 > QR 與 PDF 工具皆為純前端。遠端協助工具的靜態前端部署於 GitHub Pages，配對與短效 LiveKit 憑證由既有 Sites 後端安全提供；秘密金鑰不在本倉庫。
 > 工程照片 AI 交叉稽核為純前端，相似度判定用的 DINOv2 模型在使用者瀏覽器本機執行（背景執行緒，操作不卡頓），**免 API Key、照片不外傳**；差異說明的文字可選填 OpenRouter 金鑰（存於 localStorage），未填時改用規則模板。
@@ -40,8 +41,15 @@ original-tools/
 │   ├── src/App.tsx         # 主程式：一次分析、差異說明、Word 匯出
 │   ├── src/embedWorker.ts  # 背景執行緒：縮圖 + 像素特徵 + DINOv2 推論
 │   ├── src/dinoClient.ts   # Worker 單例用戶端（Promise 化 init/analyze/terminate）
+│   ├── src/embedCache.ts   # IndexedDB 嵌入向量快取
 │   ├── vite.config.ts      # base: /original-tools/image-audit/
 │   └── ...
+├── desktop/                # 本機桌面版（離線，雙擊 start.bat 執行）
+│   ├── index.html, assets/ # 網頁應用程式（base=/ 建置）
+│   ├── models/             # DINOv2-small 模型（約 23MB，ONNX q8）
+│   ├── start.bat           # 啟動本機伺服器並開啟瀏覽器
+│   ├── stop.bat            # 停止伺服器
+│   └── README.md
 └── .github/workflows/deploy.yml  # 建置並部署至 Pages
 ```
 

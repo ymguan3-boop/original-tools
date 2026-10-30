@@ -26,7 +26,12 @@ const THUMB_QUALITY = 0.82;
 /** 像素特徵取樣邊長 */
 const SIG_SIZE = 64;
 
-env.allowLocalModels = false;
+// 本機桌面版（localhost）優先使用內建模型檔，避免連網下載；
+// GitHub Pages 等遠端環境則直接從 HuggingFace 載入。
+const isLocal = self.location?.hostname === 'localhost' || self.location?.hostname === '127.0.0.1';
+env.allowLocalModels = isLocal;
+env.localModelPath = isLocal ? '/models/' : '';
+env.allowRemoteModels = true;
 env.useBrowserCache = true;
 
 type AnyRecord = Record<string, unknown>;
