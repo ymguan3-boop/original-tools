@@ -23,6 +23,9 @@ export interface AdvancedResult {
 type Frame={w:number;h:number;gray:Float32Array;mask:Uint8Array;canvas:HTMLCanvasElement};
 type Point={x:number;y:number;score:number;desc:Uint8Array};
 type Pair={a:Point;b:Point;distance:number};
+export interface PreparedAdvanced {frame:Frame;points:Point[];}
+/** Decode and build keypoint descriptors ONCE per uploaded photo, not per pair. */
+export async function prepareAdvanced(file:File):Promise<PreparedAdvanced>{const frame=await decode(file);return {frame,points:corners(frame)}}
 const WIDTH=384,HEIGHT=288, CIRCLE=[[0,-3],[1,-3],[2,-2],[3,-1],[3,0],[3,1],[2,2],[1,3],[0,3],[-1,3],[-2,2],[-3,1],[-3,0],[-3,-1],[-2,-2],[-1,-3]];
 const PATTERN:(readonly [number,number,number,number])[]=(()=>{
   let seed=0x2ee15b32;const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
@@ -134,13 +137,12 @@ function ransac(pairs:Pair[]):{model:Similarity|null;inlierPairs:Pair[]}{
  }
  return {model:bestModel,inlierPairs:best};
 }
-function registeredSSIM(a:Frame,b:Frame,model:Similarity){
+function registeredSSIM(a:Frame,b:Frame,model:Similarity,includeHeatmap=true){
  // 8x8 blocks; standard luminance+contrast+covariance SSIM, geometric overlap only.
  const W=a.w,H=a.h,c1=6.5025,c2=58.5225,gA=a.gray,gB=b.gray;
- const heat=document.createElement('canvas');heat.width=W;heat.height=H;
- const ctx=heat.getContext('2d');if(!ctx)throw Error('差異畫布建立失敗');
- ctx.drawImage(a.canvas,0,0);
- const overlay=ctx.getImageData(0,0,W,H),px=overlay.data;
+ let heat:HTMLCanvasElement|null=null,ctx:CanvasRenderingContext2D|null=null,overlay:ImageData|null=null;
+ if(includeHeatmap){heat=document.createElement('canvas');heat.width=W;heat.height=H;ctx=heat.getContext('2d');if(!ctx)throw Error('差異畫布建立失敗');ctx.drawImage(a.canvas,0,0);overlay=ctx.getImageData(0,0,W,H)}
+ const px=overlay?.data;
  let blocks=0,totalSSIM=0,diffCount=0,pixelCount=0;
  for(let by=0;by<H;by+=8)for(let bx=0;bx<W;bx+=8){
   let aa=0,bb=0,aaa=0,bbb=0,ab=0,n=0;
@@ -151,7 +153,7 @@ function registeredSSIM(a:Frame,b:Frame,model:Similarity){
    const va=gA[j*W+i],vb=gB[ky*W+kx],p=(j*W+i)*4;
    aa+=va;bb+=vb;aaa+=va*va;bbb+=vb*vb;ab+=va*vb;n++;pixelCount++;
    const delta=Math.abs(va-vb);if(delta>32)diffCount++;
-   if(delta>27){px[p]=250;px[p+1]=Math.round(px[p+1]*.25);px[p+2]=Math.round(px[p+2]*.25);px[p+3]=255}
+   if(delta>27&&px){px[p]=250;px[p+1]=Math.round(px[p+1]*.25);px[p+2]=Math.round(px[p+2]*.25);px[p+3]=255}
   }
   if(n<32)continue;
   const muA=aa/n,muB=bb/n,va=Math.max(0,aaa/n-muA*muA),vb=Math.max(0,bbb/n-muB*muB),cov=ab/n-muA*muB;
@@ -159,19 +161,20 @@ function registeredSSIM(a:Frame,b:Frame,model:Similarity){
   totalSSIM+=Math.max(-1,Math.min(1,s));blocks++;
  }
  if(blocks<40||pixelCount<2000)return {ssim:null,differenceArea:null,heatmap:null};
- ctx.putImageData(overlay,0,0);
- return {ssim:Math.round(10000*Math.max(0,totalSSIM/blocks))/100,differenceArea:Math.round(10000*diffCount/pixelCount)/100,heatmap:heat.toDataURL('image/jpeg',.75)};
+ if(ctx&&overlay)ctx.putImageData(overlay,0,0);
+ return {ssim:Math.round(10000*Math.max(0,totalSSIM/blocks))/100,differenceArea:Math.round(10000*diffCount/pixelCount)/100,heatmap:heat?.toDataURL('image/jpeg',.75)??null};
 }
-export async function advancedCompare(fileA:File,fileB:File):Promise<AdvancedResult>{
- const [a,b]=await Promise.all([decode(fileA),decode(fileB)]);
- const ka=corners(a),kb=corners(b),pairs=match(ka,kb),geom=ransac(pairs);
+/** Core geometry only: no decoding/keypoint detection in a full cross-folder pair sweep. */
+export function comparePrepared(aPrepared:PreparedAdvanced,bPrepared:PreparedAdvanced,includeHeatmap=false):AdvancedResult{
+ const a=aPrepared.frame,b=bPrepared.frame;
+ const pairs=match(aPrepared.points,bPrepared.points),geom=ransac(pairs);
  const inliers=geom.inlierPairs.length,ratio=pairs.length?inliers/pairs.length:0;
  let coverage=0;
  if(inliers>=4){
   const xs=geom.inlierPairs.map(p=>p.a.x),ys=geom.inlierPairs.map(p=>p.a.y);
   coverage=((Math.max(...xs)-Math.min(...xs))*(Math.max(...ys)-Math.min(...ys)))/(WIDTH*HEIGHT);
  }
- const aligned=geom.model&&inliers>=4?registeredSSIM(a,b,geom.model):{ssim:null,differenceArea:null,heatmap:null};
+ const aligned=geom.model&&inliers>=4?registeredSSIM(a,b,geom.model,includeHeatmap):{ssim:null,differenceArea:null,heatmap:null};
  let status:AdvancedResult['status']='inconclusive',label='幾何證據不足';
  if(inliers>=12&&ratio>=.48&&coverage>=.06&&aligned.ssim!==null&&aligned.ssim>=67){
   status='verified';label='高度疑似同一來源影像，優先查證';
@@ -179,4 +182,10 @@ export async function advancedCompare(fileA:File,fileB:File):Promise<AdvancedRes
  return {status,label,matches:pairs.length,inliers,inlierRatio:Math.round(1000*ratio)/10,coverage:Math.round(10000*coverage)/100,
   alignedSSIM:aligned.ssim,differenceArea:aligned.differenceArea,heatmap:aligned.heatmap,
   note:status==='verified'?'幾何對應與對齊後結構均支持可能同源；仍須核對原始照片及工程資料。':status==='review'?'已發現部分特徵對應，尚無足夠證據確認同源。':'特徵點不足、低紋理、較大透視變化或大幅裁切均可能降低匹配數；不能因此判定不同照片。'};
+}
+
+/** Standalone inspector may still process an arbitrary pair on demand. */
+export async function advancedCompare(fileA:File,fileB:File):Promise<AdvancedResult>{
+ const [a,b]=await Promise.all([prepareAdvanced(fileA),prepareAdvanced(fileB)]);
+ return comparePrepared(a,b,true);
 }
