@@ -33,7 +33,8 @@ class Canvas{
     for(let j=0;j<dh;j++)for(let i=0;i<dw;i++){
      const xx=Math.min(img.width-1,Math.floor(sx+i*sw/dw)),yy=Math.min(img.height-1,Math.floor(sy+j*sh/dh));
      const src=(yy*img.width+xx)*4,dst=((j+dy)*W+i+dx)*4;
-     c.data[dst]=img.pixels[src];c.data[dst+1]=img.pixels[src+1];c.data[dst+2]=img.pixels[src+2];c.data[dst+3]=255;
+     const data=img.pixels||img.data;
+     c.data[dst]=data[src];c.data[dst+1]=data[src+1];c.data[dst+2]=data[src+2];c.data[dst+3]=255;
     }
    },
    getImageData(){return {data:c.data.slice()}},
