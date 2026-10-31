@@ -561,8 +561,9 @@ const App = () => {
               if(!va||!vb)continue;
               const visual=common.compare(va,vb);
               const score=visual.score;
-              const patchSimilarity=localPatchScore(patches[fa],patches[fb]);
               if(score<listThreshold)continue;
+              // Compute local DINO token comparison only for selected screening candidates.
+              const patchSimilarity=localPatchScore(patches[fa],patches[fb]);
 
               matches.push({
                 id: `${folderIds[a]}-${folderIds[b]}-${fa}-${fb}`,
