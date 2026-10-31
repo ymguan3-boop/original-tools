@@ -102,7 +102,9 @@ function similarityOne(a,b){
  // Exclude lookalike lightness/color distributions unless spatial structure matches.
  if(!(pEvidence>=62&&structure>=52&&edges>=42))score=Math.min(score,59);
  else if(!(pEvidence>=76&&structure>=68&&edges>=60))score=Math.min(score,82);
- // Global perceptual hashes can fluctuate on almost-identical low-detail scenes.\n if(structure>=96&&edges>=94)score=Math.max(score, .53*structure+.47*edges-2);\n if(pix>=99.9&&hash>=98&&structure>=98)score=100;
+ // Global perceptual hashes can fluctuate on almost-identical low-detail scenes.
+ if(structure>=96&&edges>=94)score=Math.max(score, .53*structure+.47*edges-2);
+ if(pix>=99.9&&hash>=98&&structure>=98)score=100;
  return {score:Math.round(clamp100(score)*10)/10,pix,hash,col,structure,edges,dhash};
 }
 function compare(a,b){
