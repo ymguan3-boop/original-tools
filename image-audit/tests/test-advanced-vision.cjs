@@ -26,10 +26,13 @@ class Canvas{
   return {
    set fillStyle(v){},
    fillRect(x,y,w,h){for(let j=y;j<y+h;j++)for(let i=x;i<x+w;i++){const k=(j*W+i)*4;c.data[k]=127;c.data[k+1]=127;c.data[k+2]=127;c.data[k+3]=255}},
-   drawImage(img,x,y,w,h){
-    for(let j=0;j<h;j++)for(let i=0;i<w;i++){
-     const sx=Math.min(img.width-1,Math.floor(i*img.width/w)),sy=Math.min(img.height-1,Math.floor(j*img.height/h));
-     const src=(sy*img.width+sx)*4,dst=((j+y)*W+i+x)*4;
+   drawImage(img,...args){
+    let sx=0,sy=0,sw=img.width,sh=img.height,dx=0,dy=0,dw=W,dh=H;
+    if(args.length===4)[dx,dy,dw,dh]=args;
+    if(args.length===8)[sx,sy,sw,sh,dx,dy,dw,dh]=args;
+    for(let j=0;j<dh;j++)for(let i=0;i<dw;i++){
+     const xx=Math.min(img.width-1,Math.floor(sx+i*sw/dw)),yy=Math.min(img.height-1,Math.floor(sy+j*sh/dh));
+     const src=(yy*img.width+xx)*4,dst=((j+dy)*W+i+dx)*4;
      c.data[dst]=img.pixels[src];c.data[dst+1]=img.pixels[src+1];c.data[dst+2]=img.pixels[src+2];c.data[dst+3]=255;
     }
    },
@@ -64,6 +67,8 @@ assert.equal(typeof advancedCompare,'function');
  const prepared=await prepareAdvanced(a);
  const matched=comparePrepared(prepared,prepared,false);
  assert.ok(matched.inliers>=12,'Prepared vectors must match without re-decoding');
+ assert.ok(prepared.sift.length>0,'SIFT-style gradients must be extracted once per file');
+ assert.equal(typeof matched.overlap,'number','Geometric overlap ratio should be reported');
  assert.ok(matched.heatmap===null,'Bulk comparison must not allocate per-pair heatmaps');
  assert.ok(app.includes('localPatchScore'),'Local DINO tokens missing');
  for(const p of ['online/index.html','selector.html']){
