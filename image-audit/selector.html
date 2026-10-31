@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>選擇版本｜工程照片 AI 交叉稽核系統</title>
+<meta name="description" content="選擇 DINOv2 離線桌面版或免安裝的線上交叉稽核版。">
+<style>
+:root{font-family:"Microsoft JhengHei","PingFang TC",system-ui,sans-serif;color:#10213c;background:#f3f6fc}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:940px;margin:auto;padding:60px 20px 90px}
+a{color:inherit}.back{font-size:14px;color:#536b87;text-decoration:none}h1{font-size:clamp(24px,4vw,36px);margin:28px 0 12px}p{line-height:1.8;color:#52627b}.sub{font-size:15px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:34px}
+.card{display:flex;flex-direction:column;padding:30px;border:1px solid #d9e3f0;border-radius:20px;background:#fff;box-shadow:0 6px 22px #21395e0b}
+.symbol{display:grid;place-items:center;width:52px;height:52px;border-radius:13px;font-size:26px;background:#ecf1ff;color:#315bca}
+.card:nth-child(2) .symbol{background:#e9f8f3;color:#13805a}
+h2{margin:20px 0 7px;font-size:23px}small{display:block;color:#62758d;line-height:1.7}
+.tag{display:inline-flex;width:max-content;border-radius:999px;background:#eef3ff;color:#2b57b5;padding:6px 12px;font-size:12px;margin:12px 0;font-weight:700}
+.card:nth-child(2) .tag{background:#e9f8f3;color:#137455}
+ul{padding-left:21px;line-height:1.9;color:#52627b;font-size:14px;flex:1}
+.btn{display:block;text-align:center;background:#245ed2;color:white;text-decoration:none;border-radius:10px;padding:14px 16px;font-weight:800}
+.btn:hover{filter:brightness(.94)}.card:nth-child(2) .btn{background:#0c8164}
+.notice{margin-top:28px;border:1px solid #d8e0ef;background:#fff;border-radius:12px;padding:16px 18px;font-size:13px;line-height:1.8;color:#576b80}
+footer{padding-top:26px;color:#76879e;font-size:12px}
+@media(max-width:680px){.grid{grid-template-columns:1fr}.wrap{padding:24px 15px 60px}.card{padding:23px}}
+</style></head>
+<body><main class="wrap">
+<a class="back" href="../">← 返回原創工具集</a>
+<h1>工程照片 AI 交叉稽核系統</h1>
+<p class="sub">請選擇適合您的使用方式。兩版都能交叉比對工程照片、產生差異說明及匯出 Word；採用不同的影像分析引擎。</p>
+<div class="grid">
+<section class="card">
+<div class="symbol" aria-hidden="true">⬇</div><h2>下載桌面版</h2>
+<span class="tag">DINOv2 語意相似度 · 本機推論</span>
+<small>適合需要進一步辨識裁切、重新壓縮、調色等相似照片的審計工作。</small>
+<ul><li>Windows ZIP，內含 DINOv2 模型與執行檔。</li><li>解壓後雙擊「啟動工程照片稽核.exe」，自動開啟瀏覽器。</li><li>免安裝 Python / Node.js；影像推論不需網路。</li><li>需保留啟動程式視窗，並留意 Windows 未簽章程式提示。</li></ul>
+<a class="btn" download="image-audit-desktop-dinov2.zip" href="./image-audit-desktop-dinov2.zip">下載 DINOv2 桌面版 ZIP</a>
+</section>
+<section class="card">
+<div class="symbol" aria-hidden="true">🌐</div><h2>使用線上版</h2>
+<span class="tag">像素＋感知雜湊 · 不使用 DINOv2</span>
+<small>適合不想安裝程式、希望立即進行照片相似度初篩的使用者。</small>
+<ul><li>透過瀏覽器開啟，不需下載或安裝。</li><li>以像素、感知雜湊及色彩特徵進行快速初篩。</li><li>支援多資料夾交叉比對、差異說明、Word / CSV 匯出。</li><li>照片在瀏覽器處理；可選擇使用需連網的 AI 文字解說。</li></ul>
+<a class="btn" href="./">開啟線上版</a>
+</section>
+</div>
+<div class="notice"><strong>注意：</strong>真正包含 DINOv2 的桌面版不能可靠地直接雙擊 <code>file://</code> HTML 啟動模型，因此採用「雙擊 EXE → 啟動僅供本機存取的網頁」方式。兩版分數採用不同演算法，不宜直接比較；任何相似結果都應人工查核。</div>
+<footer>創作人 官毅明 · original-tools · <a href="https://github.com/ymguan3-boop/original-tools">GitHub 原始碼</a></footer>
+</main></body></html>
