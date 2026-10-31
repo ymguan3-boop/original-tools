@@ -224,6 +224,7 @@ const reportAPI=():StandardReportAPI=>{
 const reportContext=(item:MatchItem,model?:string,reason?:string):Record<string,unknown>=>({
  score:item.score,visual:item.visual,dino:item.dino,
  patchSimilarity:item.patchSimilarity,
+ advanced:item.advanced,geometryRescued:item.geometryRescued===true,edition:'desktop',
  identical:item.advanced?.status==='byte-identical',
  model,reason
 });
@@ -645,23 +646,20 @@ const App = () => {
 
       if (matches.length > MAX_RESULTS) {
         setNotice(
-          `符合「相似度 ≥ ${listThreshold}%」的配對共 ${matches.length} 組，清單僅保留分數最高的 ${MAX_RESULTS} 組。建議調高列出門檻以縮小範圍。`
+          `共同門檻或幾何補列共 ${matches.length} 組，清單只列前 ${MAX_RESULTS} 組；但所有跨批次照片仍已完成辨識。`
         );
       } else if (matches.length === 0) {
-        setNotice(`沒有相似度達 ${listThreshold}% 的配對，可調低「列出門檻」後重新分析。`);
-      } else if (!matches.some((r) => primaryScore(r) < 80)) {
-        setNotice('所有配對相似度均達 80%，無低於 80% 的案例。');
+        setNotice(`全部 ${tick} 組已完成辨識，沒有共同分數達門檻或幾何高度疑似同源的組別。`);
       }
 
       setResults(capped);
       setScanSummary({total:tick,checked:geometryChecked,errors:geometryErrors+prepareFailures,rescued:geometryRescued});
       setProgress({stage:'全部跨組照片辨識完成',done:tick,total:tick});
 
-      notify('照片交叉比對完成',
-          '本次照片 '+files.length+' 張、跨資料夾配對 '+workload.pairs.toLocaleString()+' 組\n'+
-          (reused?'已重用 '+reused+' 張相同照片的分析結果\n':'')+
-          (cachedHitCount?'已讀取 '+cachedHitCount+' 張快取特徵\n':'')+
-          '符合門檻 '+matches.length+' 組'+(matches.length>MAX_RESULTS?'（列示前 '+MAX_RESULTS+' 組）':''));
+      notify('完整照片交叉比對完成',
+          '本次 '+files.length+' 張照片、跨批次配對 '+tick+' 組，均已執行共同分數與進階幾何比對。\n'+
+          '共同門檻或幾何補列 '+matches.length+' 組（幾何補列 '+geometryRescued+' 組）。'+
+          (geometryErrors+prepareFailures?'；進階分析未完成 '+(geometryErrors+prepareFailures)+' 項。':''));
 
     } catch (error) {
       if ((error as Error).message === '已停止') {
@@ -962,15 +960,7 @@ const App = () => {
           sourceA:item.sourceA,sourceB:item.sourceB,
           filenameA:item.fileA.name,filenameB:item.fileB.name,
           imageA,imageB,
-          analysis:(()=>{
-            const baseline=item.analysis||buildRuleText(item);
-            const detail=advanced?'局部幾何與結構補充：'+advancedSummary(advanced):
-              '本組尚未執行桌面進階幾何驗證；可選取本組按「進階驗證」。';
-            // Keep all reports six-section compatible: add local evidence inside section 3.
-            return baseline.includes('【四、查核研判】')
-              ?baseline.replace('【四、查核研判】',detail+'\n\n【四、查核研判】')
-              :baseline+'\n【桌面進階查核】'+detail;
-          })(),
+          analysis:item.analysis||buildRuleText(item),
           analysisSource:item.analysisSource==='ai'?'OpenRouter AI':'本機規則模板'
         });
       }
@@ -1020,7 +1010,7 @@ const App = () => {
                 工程照片交叉稽核系統 <span className="text-sm text-indigo-700 bg-indigo-50 px-2 rounded-lg">桌面版 v{DESKTOP_VERSION}</span>
               </h1>
               <p className="text-xs text-slate-500 mt-1">
-                一次分析（像素＋DINOv2 特徵，免金鑰）→ 差異說明 → Word 查核報告
+                開始分析：全部跨批次照片進行共同視覺、DINOv2、FAST／BRIEF、RANSAC、SSIM → 查核報告 DOCX
               </p>
             </div>
             <span className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold">
