@@ -28,6 +28,10 @@ jobs:
             qr-platform/client/package-lock.json
             image-audit/package-lock.json
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
       - name: Install qr-platform deps
         working-directory: qr-platform/client
         run: npm ci
@@ -42,7 +46,20 @@ jobs:
 
       - name: Build image-audit
         working-directory: image-audit
-        run: npm run build
+        run: npm run build -- --base=./
+
+      - name: Build Windows DINOv2 portable launcher
+        run: |
+          mkdir -p image-audit/desktop-build
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o image-audit/desktop-build/啟動工程照片稽核.exe image-audit/desktop/launcher.go
+          test -s image-audit/desktop-build/啟動工程照片稽核.exe
+
+      - name: Download trusted v1.1.0 bundled DINOv2 model
+        run: |
+          curl -fsSL --retry 3 --retry-delay 3 --connect-timeout 20 \
+            -o image-audit/desktop-build/legacy-model.zip \
+            https://github.com/ymguan3-boop/original-tools/releases/download/v1.1.0/desktop-release.zip
+          test -s image-audit/desktop-build/legacy-model.zip
 
       - name: Assemble deploy site
         run: |
@@ -66,6 +83,11 @@ jobs:
           cp -r mobile-remote-assist/* deploy/mobile-remote-assist/
           # image-audit built assets (base: /original-tools/image-audit/)
           cp -r image-audit/dist/* deploy/image-audit/
+          # DINOv2 is desktop-only. Online edition uses pixel and perceptual hashing.
+          cp image-audit/online/index.html deploy/image-audit/index.html
+          cp image-audit/selector.html deploy/image-audit/selector.html
+          # Ensure current online edition is also the fallback page.
+          cp deploy/image-audit/index.html deploy/image-audit/404.html
           # Build a self-contained ZIP from static offline HTML (no Python needed by users).
           # Python is used only on the GitHub Actions runner to create the UTF-8 ZIP.
           python3 - <<'PY'
@@ -80,7 +102,53 @@ jobs:
           assert output.stat().st_size > 1024, 'Desktop ZIP is empty'
           print('Offline HTML ZIP ready:', output, output.stat().st_size, 'bytes')
           PY
-          cp deploy/image-audit/index.html deploy/image-audit/404.html || true
+          # Build a Windows portable package with locally served DINOv2 ONNX model.
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          from shutil import copyfile
+          root = Path('image-audit/desktop-build')
+          for asset in Path('image-audit/dist').rglob('*'):
+              if asset.is_file():
+                  out = root / asset.relative_to('image-audit/dist')
+                  out.parent.mkdir(parents=True, exist_ok=True)
+                  copyfile(asset, out)
+          copyfile('image-audit/desktop/使用說明.txt', root/'使用說明.txt')
+          legacy = root/'legacy-model.zip'
+          model_files = 0
+          onnx_files = 0
+          with ZipFile(legacy) as original:
+              entries = original.namelist()
+              for name in entries:
+                  clean = name.replace('\\', '/')
+                  idx = clean.find('models/')
+                  if idx < 0 or clean.endswith('/'):
+                      continue
+                  rel = Path(clean[idx:])
+                  if '..' in rel.parts:
+                      raise RuntimeError('Unsafe path in model bundle: ' + name)
+                  out = root/rel
+                  out.parent.mkdir(parents=True, exist_ok=True)
+                  out.write_bytes(original.read(name))
+                  model_files += 1
+                  if out.suffix.lower() == '.onnx':
+                      onnx_files += 1
+              print('Original release model file samples:', [x for x in entries if 'models/' in x][:12])
+          legacy.unlink()
+          if model_files == 0 or onnx_files == 0:
+              raise RuntimeError(f'Existing v1.1.0 release does not contain a DINOv2 ONNX model: models={model_files}, onnx={onnx_files}')
+          assert (root/'index.html').exists()
+          assert (root/'啟動工程照片稽核.exe').stat().st_size > 100000
+          output = Path('deploy/image-audit/image-audit-desktop-dinov2.zip')
+          with ZipFile(output, 'w', compression=ZIP_DEFLATED, compresslevel=6) as archive:
+              for file in sorted(root.rglob('*')):
+                  if file.is_file():
+                      archive.write(file, arcname=file.relative_to(root))
+          with ZipFile(output) as archive:
+              assert archive.testzip() is None, 'ZIP checksum failed'
+          print('DINOv2 portable desktop ZIP:', output, output.stat().st_size, 'bytes')
+          print('Bundled model files:', model_files, 'ONNX models:', onnx_files)
+          PY
           # ensure .nojekyll is at deploy root and subdirs for Pages
           touch deploy/.nojekyll
           touch deploy/qr-platform/.nojekyll
