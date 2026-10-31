@@ -23,6 +23,14 @@ dialog.audit-dialog::backdrop{background:rgba(16,32,55,.45);backdrop-filter:blur
 <header><span class="pill">線上版 · 不使用 DINOv2</span><h1>工程照片交叉稽核系統</h1><div class="sub">跨資料夾照片比對 · 風險初篩 · 差異說明 · DOCX 查核報告</div></header>
 <main class="wrap"><div class="panel"><a href="./selector.html" style="color:#1f5c9c;font-weight:700;text-decoration:none">← 返回版本選擇（線上版 / DINOv2 桌面版）</a></div>
 <div class="panel"><div class="row between"><strong>使用環境</strong><span id="env" class="pill">偵測中</span></div><p class="muted">本線上版本不需要安裝 Python、Node.js 或其他軟體。所有<strong>照片相似度運算在本機瀏覽器</strong>完成；不會自動上傳照片。可選擇使用 OpenRouter 線上 AI 文字解說（需網路、金鑰及明確授權，會將選取的縮圖送往第三方）。</p><div class="warning">本線上版採用pHash／dHash 感知雜湊、明暗結構相關性及邊緣一致性進行交叉驗證，<strong>不使用 DINOv2</strong>。DINOv2 模型保留於可下載的桌面版。相似度只是稽核線索，須由人員核對現場、日期、合約及驗收資料，不可直接認定重複請款。</div></div>
+<section class="panel" id="report-guide">
+ <details><summary style="font-size:17px;font-weight:800;color:#205992;cursor:pointer">查核報告一致化規則｜OpenRouter 與本機模板（點此展開）</summary>
+ <p class="muted">OpenRouter 僅用於雙張照片的可見物件與差異觀察，不會改動相似度、排除照片或直接判定工程違失。網頁版與 Windows 桌面版共用相同六段式報告格式，依序為：① 可見相同點、② 可見差異、③ 客觀比對證據、④ 查核研判、⑤ 待查證事項、⑥ 來源與判讀限制。</p>
+ <p class="muted">第三段的分數、演算法參數由本機系統寫入，不接受 AI 編造數值。第四段分開列出系統查核優先度與 AI 觀察推論，不能直接說「確定重複請款」或「照片必然不同」。</p>
+ <p class="muted">若 OpenRouter 回傳格式不符或無法取得可核對的觀察，系統會明確改用本機規則模板，並標示來源；規則模式不會假裝已由 AI 看過兩張照片。每組均標示分析來源、模型（使用 AI 時）及產製時間；DOCX 與 CSV 沿用畫面上的同一份說明。</p>
+ <p class="warning">只有主動勾選外傳同意並按下 OpenRouter 分析時，選定的縮圖才會送往外部模型。機敏工程照片請依機關規定評估是否適合外傳；所有結果均須與原始照片、施工日誌、契約及驗收紀錄交互查證。</p>
+ </details>
+ </section>
 <section class="panel" id="parameter-guide">
 <details><summary style="font-size:17px;font-weight:800;color:#205992;cursor:pointer">辨識參數及用途說明（點此展開）</summary>
 <p class="muted">本線上／免安裝 HTML 版本以<strong>快速初篩</strong>為目標，不加載大型語意、分割或物件偵測模型。照片在本機瀏覽器計算；只有使用者主動啟用第三方文字 AI，並同意傳送縮圖時才會連線傳圖。分數不是同源機率，也不是違規機率。</p>
@@ -252,10 +260,14 @@ $('aiRun').onclick=async()=>{
  const rows=visible().slice(0,Math.min(100,Math.max(1,Number($('topN').value)||5)));
  if(!rows.length){message('沒有符合門檻的照片比對結果。');return}
  S.stop=false;lock(true);
- let ai=0,fallback=0;
+ let ai=0,fallback=0,blocked=false;
  try{
   for(const m of rows){
    if(S.stop)break;
+   if(blocked){
+    m.analysis=ruleReport(m,'OpenRouter 額度或授權問題，後續項目改用規則模板');
+    m.source='rule';fallback++;drawResults();continue;
+   }
    try{
     const req={model,messages:[
      {role:'system',content:'你是中立的工程照片觀察員。必須使用指定 JSON 格式，不得擅自提供數值、工程違規或計價結論。'},
@@ -276,11 +288,12 @@ $('aiRun').onclick=async()=>{
    }catch(e){
     m.analysis=ruleReport(m,'OpenRouter 請求或輸出格式失敗，改用規則模板');
     m.source='rule';fallback++;
-    message('部分模型回覆不符合格式，已明確標示規則補寫：'+e.message);
+    if(/OpenRouter HTTP (401|402|403|404|429)\b/.test(String(e.message)))blocked=true;
+    message('部分模型回覆不符合格式或服務不可用，已標示規則補寫：'+e.message);
    }
    message('完成 '+(ai+fallback)+' / '+rows.length+' 組；OpenRouter '+ai+' 組、規則補寫 '+fallback+' 組。');
    drawResults();
-   if(ai+fallback<rows.length)await sleep(3200);
+   if(ai+fallback<rows.length&&!blocked)await sleep(3200);
   }
  }finally{
   lock(false);drawResults();
