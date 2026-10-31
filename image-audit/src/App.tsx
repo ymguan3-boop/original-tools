@@ -335,14 +335,14 @@ const App = () => {
   const chooseDirectory=async()=>{
     const picker=getFolderPicker();
     if(!picker){document.getElementById('desktopFolderInput')?.click();return}
-    try{const root=await picker({mode:'read'}),files:File[]=[];await collectFolder(root,files);appendGroups([{name:root.name,files}]);}
+    try{const root=await picker.call(window,{mode:'read'}),files:File[]=[];await collectFolder(root,files);appendGroups([{name:root.name,files}]);}
     catch(e){if((e as Error)?.name!=='AbortError')notify('資料夾讀取失敗','可改用「選取多張照片」，瀏覽器的安全權限提示無法由程式強制取消。','warning')}
   };
   const chooseManyDirectories=async()=>{
     const picker=getFolderPicker();
     if(!picker){document.getElementById('desktopManyFolderInput')?.click();return}
     try{
-      const root=await picker({mode:'read'}),groups:Array<{name:string;files:File[]}>=[],rootFiles:File[]=[];
+      const root=await picker.call(window,{mode:'read'}),groups:Array<{name:string;files:File[]}>=[],rootFiles:File[]=[];
       for await(const child of root.values?.()??[]){
         if(child.kind==='file'&&child.getFile){const file=await child.getFile();if(isImage(file))rootFiles.push(file)}
         else if(child.kind==='directory'){const files:File[]=[];await collectFolder(child,files);if(files.length)groups.push({name:child.name,files})}
