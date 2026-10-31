@@ -69,6 +69,9 @@ jobs:
       - name: Test unified six-section AI audit narratives
         run: node image-audit/tests/test-report-standard.cjs
 
+      - name: Test multi-folder batch import and drag-drop
+        run: node image-audit/tests/test-folder-import.cjs
+
       - name: Test audit triage and safer photo imports
         run: node image-audit/tests/test-audit-evidence.cjs
 
@@ -118,6 +121,7 @@ jobs:
           cp image-audit/shared/docx-export.js deploy/image-audit/docx-export.js
           cp image-audit/shared/comparator-core.js deploy/image-audit/comparator-core.js
           cp image-audit/shared/report-standard.js deploy/image-audit/report-standard.js
+          cp image-audit/shared/multi-folder-import.js deploy/image-audit/multi-folder-import.js
           # DINOv2 is desktop-only. Online edition uses pixel and perceptual hashing.
           cp image-audit/online/index.html deploy/image-audit/index.html
           cp image-audit/selector.html deploy/image-audit/selector.html
@@ -138,6 +142,7 @@ jobs:
               archive.write('image-audit/shared/docx-export.js', arcname='docx-export.js')
               archive.write('image-audit/shared/comparator-core.js', arcname='comparator-core.js')
               archive.write('image-audit/shared/report-standard.js', arcname='report-standard.js')
+              archive.write('image-audit/shared/multi-folder-import.js', arcname='multi-folder-import.js')
               archive.write('image-audit/shared/docxWriter.js', arcname='docxWriter.js')
           assert output.stat().st_size > 1024, 'Desktop ZIP is empty'
           print('Offline HTML ZIP ready:', output, output.stat().st_size, 'bytes')
@@ -181,6 +186,7 @@ jobs:
           assert (root/'index.html').exists()
           assert (root/'docxWriter.js').is_file(), 'Native DOCX writer required by the desktop app'
           assert (root/'report-standard.js').is_file(), 'Shared OpenRouter report module required'
+          assert (root/'multi-folder-import.js').is_file(), 'Multi-folder picker required in Windows ZIP'
           assert not (root/'使用說明.txt').exists(), 'Installer TXT must not be packaged'
           assert (root/'啟動工程照片稽核.exe').stat().st_size > 100000
           output = Path('deploy/image-audit/image-audit-desktop-dinov2.zip')
@@ -194,6 +200,7 @@ jobs:
               assert 'index.html' in bundled, 'index.html is mandatory for the EXE launcher'
               assert 'docxWriter.js' in bundled, 'DOCX writer must remain bundled'
               assert 'report-standard.js' in bundled, 'Unified report formatter required in desktop ZIP'
+              assert 'multi-folder-import.js' in bundled, 'Real multi-folder picker must be bundled'
               assert '使用說明.txt' not in bundled, 'Instructions have moved to selector.html'
           print('DINOv2 portable desktop ZIP:', output, output.stat().st_size, 'bytes')
           print('Bundled model files:', model_files, 'ONNX models:', onnx_files)
