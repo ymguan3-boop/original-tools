@@ -51,7 +51,8 @@ function readZip(blob){
  assert.equal((rel.match(/relationships\/image/g)||[]).length,4,'Missing photo relationships');
  for(const kind of ['online/index.html','offline/工程照片交叉稽核系統.html']){
    const html=fs.readFileSync(path.join(root,kind),'utf8');
-   assert.ok(html.includes('ImageAuditDocx.save'),kind+' not using real DOCX');
+   assert.ok(html.includes('ImageAuditDocx.create'),kind+' not using the unified native DOCX writer');
+   assert.ok(html.includes('<script src="./docxWriter.js"></script>'),kind+' missing shared DOCX module');
    assert.ok(html.includes('function notify(title,detail)'),kind+' missing centered modal');
  }
  const react=fs.readFileSync(path.join(root,'src/App.tsx'),'utf8');
