@@ -80,7 +80,8 @@ async function build(options){
  const title=options.title||"工程照片交叉稽核報告";
  body+=p(title,{style:"Title",bold:true,after:240});
  body+=p("產製日期："+new Date().toLocaleString("zh-TW"),{after:120});
- body+=p("照片 "+(options.photoCount||0)+" 張；跨資料夾配對 "+(options.totalPairs||0)+" 組；本報告列示 "+pairs.length+" 組；列示門檻 "+(options.threshold??"—")+"%。",{after:120});
+ const thresholdRaw=String(options.threshold??"—");const thresholdLabel=/^\d+(?:\.\d+)?$/.test(thresholdRaw)?thresholdRaw+"%":thresholdRaw;
+ body+=p("照片 "+(options.photoCount||0)+" 張；跨資料夾配對 "+(options.totalPairs||0)+" 組；本報告列示 "+pairs.length+" 組；列示門檻 "+thresholdLabel+"。",{after:120});
  body+=p("分析方式："+(options.engine||"照片交叉比對")+". 數值為視覺相似度指標，不代表違規機率。請核對施工日誌、拍攝日期、契約及驗收資料。",{after:200});
  let n=0;
  for(let i=0;i<pairs.length;i++){
