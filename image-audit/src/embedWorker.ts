@@ -31,7 +31,7 @@ const SIG_SIZE = 64;
 const isLocal = self.location?.hostname === 'localhost' || self.location?.hostname === '127.0.0.1';
 env.allowLocalModels = isLocal;
 env.localModelPath = isLocal ? '/models/' : '';
-env.allowRemoteModels = true;
+env.allowRemoteModels = !isLocal; // Desktop model must be packaged; do not silently fetch it over the internet.
 env.useBrowserCache = true;
 
 type AnyRecord = Record<string, unknown>;
