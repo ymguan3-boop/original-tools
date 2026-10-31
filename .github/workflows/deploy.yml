@@ -78,6 +78,9 @@ jobs:
       - name: Test browser image scoring (false positives and near duplicates)
         run: node image-audit/tests/test-comparator.cjs
 
+      - name: Test white paper margin removal and multi-region matching
+        run: node image-audit/tests/test-white-border.cjs
+
       - name: Test original-file input parity and desktop forensic report
         run: node image-audit/tests/test-preprocessing-parity.cjs
 
