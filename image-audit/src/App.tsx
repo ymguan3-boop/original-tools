@@ -977,7 +977,7 @@ const App = () => {
       if(verified.size)setResults(prev=>prev.map(r=>verified.has(r.id)?{...r,advanced:verified.get(r.id)}:r));
       const blob = await writer.create({
         title:'工程照片完整查核報告',
-        engine:'共同視覺引擎 V2.3.0（原始影像直接採樣）＋ DINOv2-small 輔助＋ FAST／BRIEF・RANSAC・SSIM（門檻 '+listThreshold+'%；自動驗證前 '+ADVANCED_BATCH_LIMIT+' 組）',
+        engine:'共同視覺引擎 V2.3.0（原圖取樣；門檻 '+listThreshold+'%；資料夾 '+folders.length+'；上傳照片 '+folders.reduce((n,f)=>n+f.files.length,0)+'；跨組配對 '+workload.pairs+'）＋ DINOv2-small 輔助＋ FAST／BRIEF・RANSAC・SSIM（自動驗證前 '+ADVANCED_BATCH_LIMIT+' 組）',
         rows:reportRows
       });
       const url=URL.createObjectURL(blob),link=document.createElement('a');
