@@ -1,4 +1,4 @@
-/* Shared photo-comparison engine V2.3: same scoring in browser and Windows DINOv2 UI.
+/* Shared photo-comparison engine V2.4: same scoring in browser and Windows DINOv2 UI.
  * Computes a comparable visual score; DINOv2 is an independent auxiliary metric.
  * Keep all screening thresholds on compare().score, never mix cosine with this score.
  */
@@ -120,5 +120,5 @@ function rule(m){
  '\\n3. 建議查證：取得原始照片／EXIF、拍攝日期、施工位置、施工日誌、估驗計價與驗收資料。相似度不代表違規機率，不得只憑影像認定重複請款。';
 }
 
-global.ImageAuditComparator={version:'2.3.0',sample,compare,similarityOne,registeredStructure,rule};
+global.ImageAuditComparator={version:'2.4.0',sample,compare,similarityOne,registeredStructure,rule};
 })(typeof window!=='undefined'?window:globalThis);
