@@ -41,7 +41,7 @@ const flush=()=>new Promise(resolve=>setTimeout(resolve,0));
  assert.equal(picker.stagedCount,2,'second independent folder must accumulate');
  foot.children[1].onclick();
  assert.equal(added.length,1,'must commit exactly once');
- assert.deepEqual(added[0].map(g=>g.name),['第一批次','第二批次']);
+ assert.equal(added[0].map(g=>g.name).join('|'),'第一批次|第二批次');
  assert.equal(added[0][0].files[0].name,'A.jpg');
  assert.equal(added[0][1].files[0].name,'B.png');
 
@@ -52,21 +52,21 @@ const flush=()=>new Promise(resolve=>setTimeout(resolve,0));
  buttons.children[1].onclick();await flush();await flush();
  assert.equal(groupPicker.stagedCount,3,'parent must split sibling folders plus root');
  foot.children[1].onclick();
- assert.deepEqual(added[1].map(g=>g.name),['工程照片（根目錄）','第一次','第二次']);
+ assert.equal(added[1].map(g=>g.name).join('|'),'工程照片（根目錄）|第一次|第二次');
 
  const d1=dir('外部一',[item('x.jpg')]),d2=dir('外部二',[item('y.jpg')]);
  const dropped=await api.droppedGroups([
   {getAsFileSystemHandle:()=>Promise.resolve(d1)},
   {getAsFileSystemHandle:()=>Promise.resolve(d2)}
  ],f=>f.name.endsWith('.jpg'));
- assert.deepEqual(dropped.map(g=>g.name),['外部一','外部二']);
+ assert.equal(dropped.map(g=>g.name).join('|'),'外部一|外部二');
  assert.equal(dropped.reduce((n,g)=>n+g.files.length,0),2);
 
  const relative=api.fromRelative([
   {...photo('1.jpg'),webkitRelativePath:'工程/第1期/1.jpg'},
   {...photo('2.jpg'),webkitRelativePath:'工程/第2期/2.jpg'}
  ],true);
- assert.deepEqual(relative.map(g=>g.name),['第1期','第2期']);
+ assert.equal(relative.map(g=>g.name).join('|'),'第1期|第2期');
 
  for(const p of ['online/index.html','offline/工程照片交叉稽核系統.html']){
   const s=fs.readFileSync(path.join(root,p),'utf8');
