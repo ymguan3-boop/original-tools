@@ -351,19 +351,6 @@ const App = () => {
     if(files.length)appendGroups([{name:'照片批次 '+(folders.length+1),files}]);
     e.target.value='';
   };
-  const addManyFolderFallback=(e:ChangeEvent<HTMLInputElement>)=>{
-    const files=Array.from(e.target.files||[]),groups=new Map<string,File[]>();
-    for(const f of files){
-      if(!isImage(f))continue;
-      const parts=(f as File & {webkitRelativePath?:string}).webkitRelativePath?.split('/')||[f.name];
-      const name=parts.length>=3?parts[1]:parts[0]+'（根目錄）';
-      if(!groups.has(name))groups.set(name,[]);
-      groups.get(name)?.push(f);
-    }
-    if(groups.size<2)notify('請選擇共同父資料夾','此功能會把父資料夾內的各個第一層子資料夾，分別建立為獨立照片群組。若照片在不同磁碟位置，請重複加入單一資料夾。','warning');
-    else appendGroups([...groups].map(([name,files])=>({name,files})));
-    e.target.value='';
-  };
   type FolderHandle={kind:string;name:string;getFile?:()=>Promise<File>;values?:()=>AsyncIterable<FolderHandle>};
   const getFolderPicker=()=> (window as unknown as {showDirectoryPicker?: (opts?:{mode:'read'})=>Promise<FolderHandle>}).showDirectoryPicker;
   const collectFolder=async(root:FolderHandle,files:File[]):Promise<void>=>{
@@ -378,19 +365,16 @@ const App = () => {
     try{const root=await picker.call(window,{mode:'read'}),files:File[]=[];await collectFolder(root,files);appendGroups([{name:root.name,files}]);}
     catch(e){if((e as Error)?.name!=='AbortError')notify('資料夾讀取失敗','可改用「選取多張照片」，瀏覽器的安全權限提示無法由程式強制取消。','warning')}
   };
-  const chooseManyDirectories=async()=>{
-    const picker=getFolderPicker();
-    if(!picker){document.getElementById('desktopManyFolderInput')?.click();return}
-    try{
-      const root=await picker.call(window,{mode:'read'}),groups:Array<{name:string;files:File[]}>=[],rootFiles:File[]=[];
-      for await(const child of root.values?.()??[]){
-        if(child.kind==='file'&&child.getFile){const file=await child.getFile();if(isImage(file))rootFiles.push(file)}
-        else if(child.kind==='directory'){const files:File[]=[];await collectFolder(child,files);if(files.length)groups.push({name:child.name,files})}
+  // No browser native picker can select unrelated directories in one dialog.
+  // Stage each chosen directory or drag several folders; commit the batch at once.
+  const chooseManyDirectories=()=>{
+    const picker=(window as Window & {
+      ImageAuditFolderPicker?:{
+        open:(opts:{isPhoto:(file:File)=>boolean;onComplete:(groups:Array<{name:string;files:File[]}>)=>void})=>void
       }
-      if(rootFiles.length)groups.unshift({name:root.name+'（根目錄）',files:rootFiles});
-      if(groups.length<2)notify('沒有多個子資料夾','請選擇至少包含兩個照片子資料夾的共同父資料夾；無法一次原生選取不同路徑的資料夾。','warning');
-      else appendGroups(groups);
-    }catch(e){if((e as Error)?.name!=='AbortError')notify('批次匯入失敗','請改選共同父資料夾，或逐一加入單個資料夾。','warning')}
+    }).ImageAuditFolderPicker;
+    if(!picker){notify('資料夾選取器未載入','請重新下載最新完整桌面 ZIP。','warning');return;}
+    picker.open({isPhoto:isImage,onComplete:appendGroups});
   };
 
   const removeFolder = (id: number) => setFolders((prev) => prev.filter((f) => f.id !== id));
@@ -1168,21 +1152,20 @@ const App = () => {
                 </h3>
                 <div className="flex flex-wrap justify-end gap-2">
                   <button type="button" onClick={()=>{void chooseDirectory();}} className="text-xs bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700">＋ 單一資料夾</button>
-                  <button type="button" onClick={()=>{void chooseManyDirectories();}} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-md hover:bg-blue-100">＋ 多個資料夾</button>
+                  <button type="button" onClick={()=>{void chooseManyDirectories();}} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-md hover:bg-blue-100">＋ 多個資料夾（連續選取）</button>
                   <label className="relative text-xs border border-slate-200 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50">＋ 多張照片
                     <input type="file" multiple accept="image/*" onChange={addSelectedFiles} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"/>
                   </label>
                   <input id="desktopFolderInput" type="file" multiple onChange={addFolder} {...({webkitdirectory:'',directory:''} as Record<string,string>)} className="hidden"/>
-                  <input id="desktopManyFolderInput" type="file" multiple onChange={addManyFolderFallback} {...({webkitdirectory:'',directory:''} as Record<string,string>)} className="hidden"/>
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto min-h-[200px] max-h-[300px] space-y-2 pr-2 custom-scrollbar">
                 {folders.length === 0 && (
                   <p className="text-xs text-slate-400 text-center py-8 leading-relaxed">
-                    可單獨加入資料夾，或選擇共同父資料夾一次加入多個子資料夾
+                    多個資料夾可從不同位置連續選取，完成後一次加入；也可拖入多個資料夾
                     <br />
-                    至少 2 個照片群組；不同路徑的資料夾可逐一加入
+                    至少 2 個照片群組；另支援選取共同父資料夾並自動分組
                   </p>
                 )}
                 {folders.map((folder, idx) => (
