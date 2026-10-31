@@ -58,7 +58,7 @@ function table(p1,p2,img1,img2){
  const grid='<w:tblGrid><w:gridCol w:w="4800"/><w:gridCol w:w="4800"/></w:tblGrid>';
  const props='<w:tblPr><w:tblW w:w="9600" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="single" w:sz="5" w:color="CBD5E1"/><w:left w:val="single" w:sz="5" w:color="CBD5E1"/><w:bottom w:val="single" w:sz="5" w:color="CBD5E1"/><w:right w:val="single" w:sz="5" w:color="CBD5E1"/><w:insideH w:val="single" w:sz="4" w:color="E2E8F0"/><w:insideV w:val="single" w:sz="4" w:color="E2E8F0"/></w:tblBorders></w:tblPr>';
  return '<w:tbl>'+props+grid+'<w:tr>'+cell(p(p1,{bold:true,after:30}))+cell(p(p2,{bold:true,after:30}))+'</w:tr>'+
- '<w:tr>'+cell(img1)+cell(img2)+'</w:tr></w:tbl>';
+ '<w:tr><w:trPr><w:cantSplit/></w:trPr>'+cell(img1)+cell(img2)+'</w:tr></w:tbl>';
 }
 function bytesFromDataUrl(d){const i=d.indexOf(",");if(i<0||!/base64/i.test(d.slice(0,i)))throw Error("Invalid JPEG data URL");const b=atob(d.slice(i+1)),a=new Uint8Array(b.length);for(let j=0;j<b.length;j++)a[j]=b.charCodeAt(j);return a}
 async function imageBox(input){
@@ -91,7 +91,7 @@ async function build(options){
   n++;
   entries.push(["word/media/photo"+n.toString().padStart(5,"0")+"_B.jpg",bImg]);
   rels.push('<Relationship Id="'+idB+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/photo'+n.toString().padStart(5,"0")+'_B.jpg"/>');
-  body+=p("第 "+(i+1)+" 組｜相似度 "+Number(item.score).toFixed(1)+"%",{bold:true,color:"1456A0",after:80,page:i===0});
+  body+=p("第 "+(i+1)+" 組｜相似度 "+Number(item.score).toFixed(1)+"%",{bold:true,color:"1456A0",after:80,page:i>0});
   body+=p(item.metrics||"",{after:80});
   body+=table("A｜"+(item.a?.folder||"")+"\n"+(item.a?.name||""),"B｜"+(item.b?.folder||"")+"\n"+(item.b?.name||""),drawing(idA,n*2+1),drawing(idB,n*2+2));
   body+=p("查核比對說明與結論：",{bold:true,after:60});
