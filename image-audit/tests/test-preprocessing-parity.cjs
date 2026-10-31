@@ -13,14 +13,14 @@ async function verify(page){
  const file={name:'source.png'};
  const sandbox={
   createImageBitmap:async f=>{assert.equal(f,file);calls.push('decode-original');return image},
-  sample:(img,crop)=>{calls.push('sample-'+(crop?'center':'full'));assert.equal(img,image,'scored lossy JPEG thumbnail instead of original');return {id:crop?'center':'full'}},
+  window:{ImageAuditComparator:{prepare:(img)=>{assert.equal(img,image,'shared comparator must score original');calls.push('shared-prepare');return {full:{id:'full'},center:{id:'center'},trimmed:null}}}},
   imgData:async f=>{assert.equal(f,file);calls.push('encode-thumb');return {url:'blob:compressed-thumbnail',img:{pixels:'lossy-JPEG'}}}
  };
  const feature=vm.runInNewContext(js+';feature',sandbox);
  const got=await feature(file);
  assert.equal(got.full.id,'full');assert.equal(got.center.id,'center');
  assert.equal(got.thumb,'blob:compressed-thumbnail');
- assert.equal(calls.join('|'),'decode-original|sample-full|sample-center|closed-original|encode-thumb','Thumb generated before raw scoring');
+ assert.equal(calls.join('|'),'decode-original|shared-prepare|closed-original|encode-thumb','Thumb generated before original multi-region scoring');
  assert.ok(!src.includes('full:sample(img),center:sample(img,true)'),'Old lossy scoring still in page');
  assert.ok(src.includes('v2.4.0'),'Build and version must be traceable');
 }
@@ -29,7 +29,7 @@ async function verify(page){
  await verify('offline/工程照片交叉稽核系統.html');
  const desktop=fs.readFileSync(path.join(root,'src/App.tsx'),'utf8');
  assert.ok(desktop.includes('createImageBitmap(files[i])'),'desktop not scoring original');
- assert.ok(desktop.includes('common.sample(bitmap)'), 'desktop not using shared core');
+ assert.ok(desktop.includes('common.prepare(bitmap)'), 'desktop not using shared multi-region preprocessing');
  assert.ok(desktop.includes('const prepared:(PreparedAdvanced|null)[]'),'missing all-photo precomputation');
  assert.ok(desktop.includes('geometryRescued'),'geometry-assisted recall not implemented');
  assert.ok(!desktop.includes('ADVANCED_BATCH_LIMIT'),'must remove 20-pair-only analysis limit');
