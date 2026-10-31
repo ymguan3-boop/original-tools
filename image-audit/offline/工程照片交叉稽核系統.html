@@ -34,6 +34,7 @@ dialog.audit-dialog::backdrop{background:rgba(16,32,55,.45);backdrop-filter:blur
   <button id="noticeDismiss" type="button">確定</button></div>
 </dialog>
 <script src="./docxWriter.js"></script>
+<script src="./docx-export.js"></script>
 <script>
 (()=>{'use strict';
 const $=(id)=>document.getElementById(id);
@@ -43,11 +44,39 @@ const wait=()=>new Promise(resolve=>setTimeout(resolve,0));
 const esc=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isPhoto=f=>/^image\/(jpeg|png|webp|bmp|gif)$/i.test(f.type)||/\.(jpe?g|png|webp|bmp|gif)$/i.test(f.name);
 function message(s){$('message').textContent=s}
+
+function notify(title,detail){
+ const old=document.getElementById("audit-central-modal");if(old)old.remove();
+ const o=document.createElement("div");o.id="audit-central-modal";o.setAttribute("role","dialog");o.setAttribute("aria-modal","true");o.setAttribute("aria-label",title);
+ o.style.cssText="position:fixed;inset:0;z-index:99999;background:rgba(13,28,48,.56);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:18px;";
+ const c=document.createElement("div");c.style.cssText="box-sizing:border-box;width:min(430px,100%);background:white;border-radius:23px;border:1px solid #dce7f5;box-shadow:0 24px 90px rgba(3,19,44,.25);padding:29px 30px;text-align:center;";
+ const icon=document.createElement("div");icon.textContent="✓";icon.style.cssText="width:56px;height:56px;border-radius:20px;margin:0 auto 16px;background:#eaf5ff;color:#1766b0;display:flex;align-items:center;justify-content:center;font-size:29px;font-weight:800;";
+ const h=document.createElement("h2");h.textContent=title;h.style.cssText="font-size:21px;margin:6px 0 10px;color:#132b48;font-weight:800;";
+ const t=document.createElement("p");t.textContent=detail;t.style.cssText="font-size:14px;color:#52677f;line-height:1.85;white-space:pre-wrap;margin:0 0 21px;";
+ const b=document.createElement("button");b.textContent="確定";b.style.cssText="background:#2268aa;border:0;color:white;border-radius:11px;padding:11px 37px;font-size:15px;font-weight:700;cursor:pointer;";
+ const close=()=>o.remove();b.addEventListener("click",close);o.addEventListener("click",e=>{if(e.target===o)close()});o.addEventListener("keydown",e=>{if(e.key==="Escape")close()});
+ c.append(icon,h,t,b);o.append(c);document.body.append(o);b.focus();
+}
+function askGroupName(defaultName){
+ return new Promise(resolve=>{
+  const old=document.getElementById("audit-central-modal");if(old)old.remove();
+  const o=document.createElement("div");o.id="audit-central-modal";o.style.cssText="position:fixed;inset:0;z-index:99999;background:rgba(13,28,48,.55);display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(5px)";o.setAttribute("role","dialog");o.setAttribute("aria-modal","true");
+  const c=document.createElement("div");c.style.cssText="background:white;border-radius:19px;width:min(420px,100%);padding:26px;box-shadow:0 18px 55px #12253a40";
+  const h=document.createElement("h2");h.textContent="命名照片群組";h.style.cssText="color:#132b48;margin:0 0 14px;font-size:21px";
+  const i=document.createElement("input");i.value=defaultName;i.style.cssText="box-sizing:border-box;width:100%;border:1px solid #b9cce0;border-radius:9px;padding:12px;font-size:15px";
+  const row=document.createElement("div");row.style.cssText="display:flex;gap:10px;justify-content:flex-end;margin-top:20px";
+  const cancel=document.createElement("button");cancel.textContent="取消";const ok=document.createElement("button");ok.textContent="加入照片";for(const b of [cancel,ok]){b.style.cssText="border:1px solid #d5e3f0;background:#f2f6fb;border-radius:9px;padding:10px 16px;cursor:pointer;font-size:14px";}ok.style.background="#2568aa";ok.style.color="white";
+  const finish=v=>{o.remove();resolve(v)};
+  cancel.onclick=()=>finish(null);ok.onclick=()=>finish(i.value.trim()||defaultName);i.onkeydown=e=>{if(e.key==="Enter")finish(i.value.trim()||defaultName);if(e.key==="Escape")finish(null)};
+  row.append(cancel,ok);c.append(h,i,row);o.append(c);document.body.append(o);i.focus();i.select();
+ });
+}
+
 function modal(title,detail){const d=$('noticeDialog');$('noticeTitle').textContent=title;$('noticeText').textContent=detail;
  if(typeof d.showModal==='function'){if(!d.open)d.showModal();}else d.setAttribute('open','');}
 $('noticeDismiss').onclick=()=>{const d=$('noticeDialog');if(typeof d.close==='function')d.close();else d.removeAttribute('open');};
 function resetResults(){S.items=[];S.results=[];S.page=0;S.allPairs=0;drawResults()}
-function addGroup(name,files){const accepted=Array.from(files).filter(isPhoto);if(!accepted.length){message('找不到可解碼的圖片，請確認所選檔案格式。');return}S.groups.push({id:++S.seq,name:name||'照片群組 '+S.seq,files:accepted});resetResults();drawFolders();message('已加入 '+accepted.length+' 張照片。');modal('匯入成功','已加入「'+name+'」\n共 '+accepted.length+' 張工程照片。')}
+function addGroup(name,files){const accepted=Array.from(files).filter(isPhoto);if(!accepted.length){message('找不到可解碼的圖片，請確認所選檔案格式。');return}S.groups.push({id:++S.seq,name:name||'照片群組 '+S.seq,files:accepted});resetResults();drawFolders();message('已加入 '+accepted.length+' 張照片。');notify('照片已加入','成功加入「'+(name||'照片群組')+'」共 '+accepted.length+' 張，完成資料來源選擇後即可開始比對。');modal('匯入成功','已加入「'+name+'」\n共 '+accepted.length+' 張工程照片。')}
 function drawFolders(){const el=$('folders');el.replaceChildren();if(!S.groups.length){el.innerHTML='<p class="hint">尚未加入資料夾。</p>';return}for(const g of S.groups){const row=document.createElement('div');row.className='folder';const text=document.createElement('div');const strong=document.createElement('strong');strong.textContent=g.name;const small=document.createElement('small');small.textContent=' · '+g.files.length+' 張照片';text.append(strong,small);const btn=document.createElement('button');btn.textContent='移除';btn.onclick=()=>{S.groups=S.groups.filter(x=>x.id!==g.id);resetResults();drawFolders()};row.append(text,btn);el.append(row)}}
 $('addFolder').onclick=()=>$('folderInput').click();$('addFiles').onclick=()=>$('fileInput').click();
 $('folderInput').onchange=e=>{const files=Array.from(e.target.files||[]);if(files.length){const roots=new Map();for(const f of files){if(!isPhoto(f))continue;const root=(f.webkitRelativePath||f.name).split('/')[0]||'照片資料夾';if(!roots.has(root))roots.set(root,[]);roots.get(root).push(f)}for(const [name,group] of roots)addGroup(name,group)}e.target.value=''};
@@ -177,7 +206,8 @@ $('run').onclick=async()=>{
       S.results.sort((x,y)=>y.score-x.score);
       S.results.length=Math.min(S.results.length,MAX_RESULTS);
       progress(count,pairTotal,'比對完成');
-      message(S.stop?'已停止，保留部分結果。':'比對完成：'+count.toLocaleString()+' 組，符合目前門檻的結果可在下方查看。');if(!S.stop)modal('照片比對完成','已分析 '+S.items.length+' 張照片\\n跨群組配對 '+count.toLocaleString()+' 組\\n達到 '+threshold+'% 門檻：'+S.results.filter(m=>m.score>=threshold).length+' 組');
+      message(S.stop?'已停止，保留部分結果。':'比對完成：'+count.toLocaleString()+' 組，符合目前門檻的結果可在下方查看。');
+       notify(S.stop?'分析已停止':'照片交叉比對完成','已處理 '+S.items.length+' 張照片，共比對 '+count.toLocaleString()+' 組；達門檻 '+S.results.filter(m=>m.score>=Number($('threshold').value)).length+' 組。');if(!S.stop)modal('照片比對完成','已分析 '+S.items.length+' 張照片\\n跨群組配對 '+count.toLocaleString()+' 組\\n達到 '+threshold+'% 門檻：'+S.results.filter(m=>m.score>=threshold).length+' 組');
     }else message('已停止照片讀取。');
   }catch(err){console.error(err);message('執行失敗：'+err.message)}
   finally{lock(false);drawResults()}
@@ -193,29 +223,28 @@ function download(name,content,type){const blob=new Blob([content],{type}),url=U
 function dateTag(){return new Date().toISOString().slice(0,10)}
 $('csv').onclick=()=>{const rows=visible();if(!rows.length){message('目前沒有符合門檻的結果可匯出。');return}const quote=s=>'"'+String(s??'').replace(/"/g,'""')+'"';const data=[['組別 A','檔案 A','組別 B','檔案 B','多特徵相似指標 (%)','pHash (%)','明暗結構 (%)','邊緣一致性 (%)','像素 (%)','色彩 (%)','差異說明','說明來源'],...rows.map(m=>[m.a.folder,m.a.file.name,m.b.folder,m.b.file.name,m.score.toFixed(1),m.hash.toFixed(1),m.structure.toFixed(1),m.edges.toFixed(1),m.pix.toFixed(1),m.col.toFixed(1),m.analysis||rule(m),m.source||'rule'])];download('工程照片交叉稽核_'+dateTag()+'.csv','\ufeff'+data.map(r=>r.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8');message('已匯出 '+rows.length+' 組 CSV 結果。');modal('CSV 匯出成功','已依相似度排序匯出 '+rows.length+' 組比對結果。')};
 $('word').onclick=async()=>{
- const rows=visible().slice().sort((a,b)=>b.score-a.score);
- if(!rows.length){message('目前沒有符合門檻的對照組可匯出。');modal('無法匯出','請先完成比對並確認有符合門檻的照片。');return;}
- const btn=$('word');btn.disabled=true;
+ const rows=[...visible()].sort((a,b)=>b.score-a.score);
+ if(!rows.length){notify('沒有可匯出的對照組','目前沒有符合列示門檻的結果，請先完成比對或調整門檻。');return}
+ if(!window.ImageAuditDocx){notify('DOCX 模組尚未載入','請重新整理頁面或確認同資料夾內有 docx-export.js。');return}
+ $('word').disabled=true;
+ message('正在產製 DOCX，逐一嵌入 '+rows.length+' 組對照照片…');
  try{
-  if(!window.ImageAuditDocx)throw Error('DOCX 模組未載入，請重新下載完整程式或重新整理網頁。');
-  const blob=await window.ImageAuditDocx.create({
-   title:'工程照片完整查核報告',
-   engine:'pHash/dHash、明暗結構及邊緣一致性（瀏覽器本機，非 DINOv2）',
-   rows:rows.map(m=>({
-    score:m.score,label:'多特徵相似度指標',
-    detail:'pHash '+m.hash.toFixed(1)+'%　｜　結構 '+m.structure.toFixed(1)+'%　｜　邊緣 '+m.edges.toFixed(1)+'%',
-    sourceA:m.a.folder,sourceB:m.b.folder,filenameA:m.a.file.name,filenameB:m.b.file.name,
-    imageA:m.a.thumb,imageB:m.b.thumb,analysis:m.analysis||rule(m),analysisSource:m.source==='ai'?'AI 分析':'規則判定'
-   }))
+  const pairs=rows.map(m=>({
+   score:m.score,
+   a:{folder:m.a.folder,name:m.a.file.name,dataUrl:m.a.thumb},
+   b:{folder:m.b.folder,name:m.b.file.name,dataUrl:m.b.thumb},
+   metrics:'pHash '+m.hash.toFixed(1)+'%｜明暗結構 '+m.structure.toFixed(1)+'%｜邊緣一致性 '+m.edges.toFixed(1)+'%｜像素 '+m.pix.toFixed(1)+'%（輔助）｜色彩 '+m.col.toFixed(1)+'%（輔助）',
+   analysis:m.analysis||rule(m)
+  }));
+  await window.ImageAuditDocx.save({
+   filename:'工程照片交叉稽核報告_'+dateTag()+'.docx',
+   pairs,photoCount:S.items.length,totalPairs:S.allPairs,threshold:$('threshold').value,
+   engine:'pHash/dHash、明暗結構與邊緣一致性（非 DINOv2）'
   });
-  const url=URL.createObjectURL(blob),link=document.createElement('a');
-  link.href=url;link.download='工程照片完整查核報告_'+dateTag()+'.docx';
-  document.body.append(link);link.click();link.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),30000);
-  message('DOCX 報告已匯出：'+rows.length+' 組。');
-  modal('DOCX 報告已產生','共 '+rows.length+' 組比對照片，依相似度由高至低排序。每組雙圖已按相同欄寬等比例置中縮放。');
- }catch(error){console.error(error);message('DOCX 匯出失敗：'+error.message);modal('匯出失敗',String(error.message||error));}
- finally{btn.disabled=false;}
+  message('已匯出 '+rows.length+' 組完整 DOCX 查核報告（含雙圖與說明）。');
+  notify('DOCX 查核報告已完成','已依相似度由高到低匯出 '+rows.length+' 組雙圖對照，所有照片統一尺寸並保留原始比例。');
+ }catch(err){console.error(err);message('DOCX 匯出失敗：'+err.message);notify('DOCX 匯出失敗',String(err.message||err))}
+ finally{$('word').disabled=false}
 };
 $('env').textContent=location.protocol==='file:'?'已由本機 HTML 啟動（file://）':'可離線執行的 HTML 版';
 drawFolders();drawResults();
