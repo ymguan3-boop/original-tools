@@ -10,6 +10,7 @@ export interface BatchItemResult {
   thumb: Blob;
   sig: Uint8ClampedArray;
   embedding: Float32Array | null;
+  patch: Float32Array | null;
   width: number;
   height: number;
 }
