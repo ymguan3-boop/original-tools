@@ -52,6 +52,7 @@ dialog.audit-dialog::backdrop{background:rgba(16,32,55,.45);backdrop-filter:blur
 <script src="./docxWriter.js"></script>
 <script src="./docx-export.js"></script>
 <script src="./comparator-core.js"></script>
+<script src="./report-standard.js"></script>
 <script>
 (()=>{'use strict';
 const $=(id)=>document.getElementById(id);
@@ -227,14 +228,68 @@ $('run').onclick=async()=>{
   finally{lock(false);drawResults()}
 };
 function visible(){const t=Number($('threshold').value);return S.results.filter(x=>x.score>=t)}
-function drawResults(){const v=visible(), el=$('matches');$('stats').innerHTML='<span class="stat">照片 <b>'+S.items.length+'</b></span><span class="stat">跨群組配對 <b>'+S.allPairs.toLocaleString()+'</b></span><span class="stat">達門檻組數 <b>'+v.length+'</b></span><span class="stat">最高分 <b>'+(S.results.length?S.results[0].score.toFixed(1)+'%':'—')+'</b></span>';el.replaceChildren();if(!v.length){el.innerHTML='<p class="hint">沒有符合目前門檻的組合。您可降低列出門檻後重新檢視（不需重算），或新增不同資料夾重新分析。</p>';$('pageLabel').textContent='';return}S.page=Math.max(0,Math.min(S.page,Math.ceil(v.length/PAGE_SIZE)-1));for(const m of v.slice(S.page*PAGE_SIZE,(S.page+1)*PAGE_SIZE)){const box=document.createElement('article');box.className='match';const imgs=[m.a,m.b];for(const item of imgs){const col=document.createElement('div');col.className='photo';const label=document.createElement('b');label.textContent=item.folder;label.style.fontSize='12px';const im=document.createElement('img');im.src=item.thumb;im.alt=item.file.name;const title=document.createElement('div');title.className='filename';title.textContent=item.file.name;col.append(label,im,title);box.append(col)}const d=document.createElement('div');d.className='detail';const score=document.createElement('div');score.className='score';score.textContent=m.score.toFixed(1)+'%';const sub=document.createElement('div');sub.className='muted';sub.textContent='pHash '+m.hash.toFixed(1)+'% · 結構 '+m.structure.toFixed(1)+'% · 校正 '+m.registered.toFixed(1)+'%'+(m.strongEvidence?' · 優先複核':'');const summary=document.createElement('div');summary.className='summary';summary.textContent=m.analysis||rule(m);const btn=document.createElement('button');btn.className='smallbtn';btn.textContent='排除這組';btn.onclick=()=>{S.results=S.results.filter(x=>x!==m);drawResults()};d.append(score,sub,summary,btn);box.append(d);el.append(box)}$('pageLabel').textContent='第 '+(S.page+1)+' / '+Math.ceil(v.length/PAGE_SIZE)+' 頁（共 '+v.length+' 組）'}
+function drawResults(){const v=visible(), el=$('matches');$('stats').innerHTML='<span class="stat">照片 <b>'+S.items.length+'</b></span><span class="stat">跨群組配對 <b>'+S.allPairs.toLocaleString()+'</b></span><span class="stat">達門檻組數 <b>'+v.length+'</b></span><span class="stat">最高分 <b>'+(S.results.length?S.results[0].score.toFixed(1)+'%':'—')+'</b></span>';el.replaceChildren();if(!v.length){el.innerHTML='<p class="hint">沒有符合目前門檻的組合。您可降低列出門檻後重新檢視（不需重算），或新增不同資料夾重新分析。</p>';$('pageLabel').textContent='';return}S.page=Math.max(0,Math.min(S.page,Math.ceil(v.length/PAGE_SIZE)-1));for(const m of v.slice(S.page*PAGE_SIZE,(S.page+1)*PAGE_SIZE)){const box=document.createElement('article');box.className='match';const imgs=[m.a,m.b];for(const item of imgs){const col=document.createElement('div');col.className='photo';const label=document.createElement('b');label.textContent=item.folder;label.style.fontSize='12px';const im=document.createElement('img');im.src=item.thumb;im.alt=item.file.name;const title=document.createElement('div');title.className='filename';title.textContent=item.file.name;col.append(label,im,title);box.append(col)}const d=document.createElement('div');d.className='detail';const score=document.createElement('div');score.className='score';score.textContent=m.score.toFixed(1)+'%';const sub=document.createElement('div');sub.className='muted';sub.textContent='pHash '+m.hash.toFixed(1)+'% · 結構 '+m.structure.toFixed(1)+'% · 校正 '+m.registered.toFixed(1)+'%'+(m.strongEvidence?' · 優先複核':'');const summary=document.createElement('div');summary.className='summary';summary.textContent=reportText(m);const btn=document.createElement('button');btn.className='smallbtn';btn.textContent='排除這組';btn.onclick=()=>{S.results=S.results.filter(x=>x!==m);drawResults()};d.append(score,sub,summary,btn);box.append(d);el.append(box)}$('pageLabel').textContent='第 '+(S.page+1)+' / '+Math.ceil(v.length/PAGE_SIZE)+' 頁（共 '+v.length+' 組）'}
 $('prev').onclick=()=>{S.page--;drawResults()};$('next').onclick=()=>{S.page++;drawResults()};
-$('notes').onclick=()=>{for(const m of S.results){m.analysis=rule(m);m.source='rule'}drawResults();message('已產生 '+S.results.length+' 組離線差異說明。');modal('差異說明已完成','已產生 '+S.results.length+' 組照片比對說明，可在下方檢視與匯出。')};
+// Unified six-section report for web, offline HTML and desktop DINOv2.
+const report=window.ImageAuditReportStandard;
+if(!report)throw Error('共用查核報告模組 report-standard.js 未載入');
+function reportContext(m,reason){
+ return {score:m.score,hash:m.hash,dhash:m.dhash,structure:m.structure,edges:m.edges,
+   registered:m.registered,pix:m.pix,col:m.col,strongEvidence:m.strongEvidence,reason};
+}
+function ruleReport(m,reason){return report.formatRule(reportContext(m,reason))}
+function reportText(m){return m.analysis||ruleReport(m)}
+$('notes').onclick=()=>{
+ for(const m of S.results){m.analysis=ruleReport(m);m.source='rule'}
+ drawResults();message('已產生 '+S.results.length+' 組一致化規則查核說明。');
+ modal('查核說明已完成','已產生 '+S.results.length+' 組六段式報告，可在下方檢視或匯出 DOCX。')
+};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-$('aiRun').onclick=async()=>{const key=$('apiKey').value.trim(),model=$('model').value.trim();if(!key||!model){message('使用線上 AI 前請填入 API Key 與模型 ID；離線規則說明不需要金鑰。');return}if(!$('consent').checked){message('請先勾選照片縮圖外傳授權；如為機敏照片，建議僅用離線說明。');return}const rows=visible().slice(0,Math.min(100,Math.max(1,Number($('topN').value)||5)));if(!rows.length){message('尚無符合門檻的比對結果。');return}S.stop=false;lock(true);let count=0;try{for(const m of rows){if(S.stop)break;const req={model,messages:[{role:'user',content:[{type:'text',text:'你是工程查核助理。以下為不同資料夾的兩張工程照片，請描述可觀察之相同點、不同點與需人工查證的事項。不得僅憑影像認定違法、重複請款，請以繁體中文精簡回應。'},{type:'image_url',image_url:{url:m.a.thumb}},{type:'image_url',image_url:{url:m.b.thumb}}]}],max_tokens:500};try{const resp=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(req)});if(!resp.ok)throw Error('HTTP '+resp.status);const j=await resp.json();const answer=j.choices?.[0]?.message?.content;m.analysis=typeof answer==='string'&&answer.trim()?answer.trim():rule(m);m.source='ai'}catch(e){m.analysis=rule(m);m.source='rule';message('線上 AI 請求失敗（'+e.message+'），已改用離線規則說明；可能為網路或瀏覽器 CORS 限制。');break}count++;message('完成 '+count+' / '+rows.length+' 組線上 AI 文字解說');drawResults();if(count<rows.length)await sleep(3200)}}finally{lock(false);drawResults()}};
+$('aiRun').onclick=async()=>{
+ const key=$('apiKey').value.trim(),model=$('model').value.trim();
+ if(!key||!model){message('使用 OpenRouter 前請填入 API Key 與視覺模型 ID。');return}
+ if(!$('consent').checked){message('請先同意將所選照片縮圖傳送給外部視覺模型；機敏照片請改用本機規則說明。');return}
+ const rows=visible().slice(0,Math.min(100,Math.max(1,Number($('topN').value)||5)));
+ if(!rows.length){message('沒有符合門檻的照片比對結果。');return}
+ S.stop=false;lock(true);
+ let ai=0,fallback=0;
+ try{
+  for(const m of rows){
+   if(S.stop)break;
+   try{
+    const req={model,messages:[
+     {role:'system',content:'你是中立的工程照片觀察員。必須使用指定 JSON 格式，不得擅自提供數值、工程違規或計價結論。'},
+     {role:'user',content:[
+      {type:'text',text:report.prompt()},
+      {type:'image_url',image_url:{url:m.a.thumb}},
+      {type:'image_url',image_url:{url:m.b.thumb}}
+     ]}
+    ],temperature:0,max_tokens:1200,stream:false};
+    const resp=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+     method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+     body:JSON.stringify(req)
+    });
+    if(!resp.ok)throw Error('OpenRouter HTTP '+resp.status);
+    const j=await resp.json(),answer=report.extractContent(j);
+    m.analysis=report.formatAI(answer,{...reportContext(m),model:j.model||model});
+    m.source='ai';ai++;
+   }catch(e){
+    m.analysis=ruleReport(m,'OpenRouter 請求或輸出格式失敗，改用規則模板');
+    m.source='rule';fallback++;
+    message('部分模型回覆不符合格式，已明確標示規則補寫：'+e.message);
+   }
+   message('完成 '+(ai+fallback)+' / '+rows.length+' 組；OpenRouter '+ai+' 組、規則補寫 '+fallback+' 組。');
+   drawResults();
+   if(ai+fallback<rows.length)await sleep(3200);
+  }
+ }finally{
+  lock(false);drawResults();
+  modal('AI 查核報告已完成','OpenRouter '+ai+' 組；規則補寫 '+fallback+' 組。已統一為六段式格式。')
+ }
+};
 function download(name,content,type){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),40000)}
 function dateTag(){return new Date().toISOString().slice(0,10)}
-$('csv').onclick=()=>{const rows=visible();if(!rows.length){message('目前沒有符合門檻的結果可匯出。');return}const quote=s=>'"'+String(s??'').replace(/"/g,'""')+'"';const data=[['組別 A','檔案 A','組別 B','檔案 B','多特徵相似指標 (%)','pHash (%)','明暗結構 (%)','邊緣一致性 (%)','位置校正 (%)','像素 (%)','色彩 (%)','差異說明','說明來源'],...rows.map(m=>[m.a.folder,m.a.file.name,m.b.folder,m.b.file.name,m.score.toFixed(1),m.hash.toFixed(1),m.structure.toFixed(1),m.edges.toFixed(1),m.registered.toFixed(1),m.pix.toFixed(1),m.col.toFixed(1),m.analysis||rule(m),m.source||'rule'])];download('工程照片交叉稽核_'+dateTag()+'.csv','\ufeff'+data.map(r=>r.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8');message('已匯出 '+rows.length+' 組 CSV 結果。');modal('CSV 匯出成功','已依相似度排序匯出 '+rows.length+' 組比對結果。')};
+$('csv').onclick=()=>{const rows=visible();if(!rows.length){message('目前沒有符合門檻的結果可匯出。');return}const quote=s=>'"'+String(s??'').replace(/"/g,'""')+'"';const data=[['組別 A','檔案 A','組別 B','檔案 B','多特徵相似指標 (%)','pHash (%)','明暗結構 (%)','邊緣一致性 (%)','位置校正 (%)','像素 (%)','色彩 (%)','差異說明','說明來源'],...rows.map(m=>[m.a.folder,m.a.file.name,m.b.folder,m.b.file.name,m.score.toFixed(1),m.hash.toFixed(1),m.structure.toFixed(1),m.edges.toFixed(1),m.registered.toFixed(1),m.pix.toFixed(1),m.col.toFixed(1),reportText(m),m.source||'rule'])];download('工程照片交叉稽核_'+dateTag()+'.csv','\ufeff'+data.map(r=>r.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8');message('已匯出 '+rows.length+' 組 CSV 結果。');modal('CSV 匯出成功','已依相似度排序匯出 '+rows.length+' 組比對結果。')};
 $('word').onclick=async()=>{
  const rows=[...visible()].sort((a,b)=>b.score-a.score);
  if(!rows.length){notify('沒有可匯出的對照組','目前沒有符合列示門檻的結果，請先完成比對或調整門檻。');return}
@@ -247,7 +302,7 @@ $('word').onclick=async()=>{
    a:{folder:m.a.folder,name:m.a.file.name,dataUrl:m.a.thumb},
    b:{folder:m.b.folder,name:m.b.file.name,dataUrl:m.b.thumb},
    metrics:'pHash '+m.hash.toFixed(1)+'%｜明暗結構 '+m.structure.toFixed(1)+'%｜邊緣一致性 '+m.edges.toFixed(1)+'%｜位置校正 '+m.registered.toFixed(1)+'%｜像素 '+m.pix.toFixed(1)+'%（輔助）｜色彩 '+m.col.toFixed(1)+'%（輔助）',
-   analysis:m.analysis||rule(m)
+   analysis:reportText(m)
   }));
   await window.ImageAuditDocx.save({
    filename:'工程照片交叉稽核報告_'+dateTag()+'.docx',
