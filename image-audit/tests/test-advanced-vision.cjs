@@ -44,7 +44,7 @@ const sandbox={module:fake,exports:fake.exports,Math,Float32Array,Uint8Array,Uin
  document:{createElement(tag){assert.equal(tag,'canvas');return new Canvas()}},
  createImageBitmap:async(file)=>({width:W,height:H,pixels:file.pixels,close(){}})};
 vm.runInNewContext(js,sandbox);
-const {advancedCompare}=fake.exports;
+const {advancedCompare,prepareAdvanced,comparePrepared}=fake.exports;
 assert.equal(typeof advancedCompare,'function');
 (async()=>{
  const a={pixels:seedPixels(7)};
@@ -58,8 +58,13 @@ assert.equal(typeof advancedCompare,'function');
  const unrelated=await advancedCompare(a,b);
  assert.notEqual(unrelated.status,'verified','independent textures must not be confirmed as same source');
  const app=fs.readFileSync(path.join(root,'src/App.tsx'),'utf8');
- assert.ok(app.includes('advancedCompare(item.fileA,item.fileB)'),'Advanced check not wired into detail view');
- assert.ok(app.includes('進階驗證：局部特徵＋RANSAC＋SSIM'),'Missing action');
+ assert.ok(app.includes('comparePrepared(prepared[fa]!,prepared[fb]!,false)'),'Exhaustive local geometry not wired into Start');
+ assert.ok(app.includes('const prepared:(PreparedAdvanced|null)[]'),'Photo-level geometry cache missing');
+ assert.ok(app.indexOf('comparePrepared(prepared[fa]!')<app.indexOf('if(score<listThreshold&&!rescued)'),'Geometry must happen BEFORE screening threshold');
+ const prepared=await prepareAdvanced(a);
+ const matched=comparePrepared(prepared,prepared,false);
+ assert.ok(matched.inliers>=12,'Prepared vectors must match without re-decoding');
+ assert.ok(matched.heatmap===null,'Bulk comparison must not allocate per-pair heatmaps');
  assert.ok(app.includes('localPatchScore'),'Local DINO tokens missing');
  for(const p of ['online/index.html','selector.html']){
   const html=fs.readFileSync(path.join(root,p),'utf8');
