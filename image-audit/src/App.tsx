@@ -831,7 +831,7 @@ ${scoreInfo}
         reportRows.push({
           score:primaryScore(item),
           label:item.dino!==null?'DINOv2 特徵相似度':'像素相似度',
-          detail:'像素相似度：'+item.pixel.toFixed(2)+'%｜查核判讀：'+assessPhotoEvidence(item).heading',
+          detail:'像素相似度：'+item.pixel.toFixed(2)+'%｜查核判讀：'+assessPhotoEvidence(item).heading,
           sourceA:item.sourceA,sourceB:item.sourceB,
           filenameA:item.fileA.name,filenameB:item.fileB.name,
           imageA,imageB,
