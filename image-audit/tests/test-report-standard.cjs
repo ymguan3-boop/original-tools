@@ -18,7 +18,7 @@ const ai=api.formatAI(response,ctx),rule=api.formatRule(ctx);
 const sections=['【一、照片可見相同點】','【二、照片可見差異】','【三、客觀比對證據】','【四、查核研判】','【五、待查證事項】','【六、來源與判讀限制】'];
 for(const output of [ai,rule]){
  let last=-1;for(const part of sections){const pos=output.indexOf(part);assert.ok(pos>last,'Invalid report section '+part);last=pos}
- assert.ok(output.includes('共同視覺相似度：87.4%'),'Measured evidence absent');
+ assert.ok(output.includes('共同視覺初篩分數：87.4%'),'Measured evidence absent');
  assert.ok(output.includes('不等於同一來源或違規機率'),'Required safety caveat absent');
  assert.ok(output.includes('核對施工位置'),'Mandatory verification missing');
  assert.ok(!output.includes('已確定違規'),'Unsafe legal conclusion');
@@ -29,10 +29,10 @@ const recovered=api.formatRule({
  matches:29,inliers:23,inlierRatio:79.3,coverage:70.9,alignedSSIM:91.4,
  differenceArea:1.7,note:'幾何對應與結構一致'}
 });
-assert.ok(recovered.includes('FAST／BRIEF'), 'Forensic method not documented');
+assert.ok(recovered.includes('FAST / BRIEF')||recovered.includes('FAST／BRIEF'), 'Forensic method not documented');
 assert.ok(recovered.includes('23 個內點'), 'RANSAC result not shown');
 assert.ok(recovered.includes('91.4%'), 'SSIM not shown');
-assert.ok(recovered.includes('高度疑似')&&recovered.includes('即使共同視覺分數較低'),
+assert.ok(recovered.includes('高度疑似')&&recovered.includes('快速分數可能因白邊'),
  'Low shared score must not override strong geometry');
 assert.ok(!recovered.includes('現有證據不足以確認同源'), 'Contradictory low-score conclusion');
 assert.ok(ai.includes('OpenRouter 視覺模型')&&ai.includes('test/vision-model'));
