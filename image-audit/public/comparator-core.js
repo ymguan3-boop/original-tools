@@ -1,15 +1,51 @@
-/* Shared photo-comparison engine V2.4: same scoring in browser and Windows DINOv2 UI.
+/* Shared photo-comparison engine V2.5: same scoring in browser and Windows DINOv2 UI.
  * Computes a comparable visual score; DINOv2 is an independent auxiliary metric.
  * Keep all screening thresholds on compare().score, never mix cosine with this score.
  */
 (function(global){'use strict';
 const DCT_COS=Array.from({length:8},(_,u)=>Float64Array.from({length:32},(_,x)=>Math.cos(Math.PI*(2*x+1)*u/64)));
 const clamp100=x=>Math.max(0,Math.min(100,x));
-function sample(img,crop=false){
+// Conservative white-paper margin detection (not semantic foreground segmentation).
+// Only trim contiguous nearly-white exterior rows/columns; never delete dark scene content.
+function whiteBounds(img){
+ const c=document.createElement('canvas');c.width=c.height=192;
+ const ctx=c.getContext('2d',{willReadFrequently:true});
+ ctx.drawImage(img,0,0,192,192);
+ const rgba=ctx.getImageData(0,0,192,192).data;
+ const bright=(x,y)=>{const k=(y*192+x)*4;return rgba[k]>236&&rgba[k+1]>236&&rgba[k+2]>236};
+ const whiteRow=y=>{let n=0;for(let x=0;x<192;x++)if(bright(x,y))n++;return n/192};
+ const whiteCol=x=>{let n=0;for(let y=0;y<192;y++)if(bright(x,y))n++;return n/192};
+ // Sample is stretched only to detect the border fractions, not to score photographs.
+ let left=0,right=191,top=0,bottom=191;
+ for(;top<70&&whiteRow(top)>.965;top++);
+ for(;bottom>121&&whiteRow(bottom)>.965;bottom--);
+ for(;left<70&&whiteCol(left)>.965;left++);
+ for(;right>121&&whiteCol(right)>.965;right--);
+ const w=right-left+1,h=bottom-top+1;
+ const trimmed=left>2||top>2||right<189||bottom<189;
+ if(!trimmed||w<76||h<76)return null;
+ // Never crop merely because the photo is all white / empty paper.
+ let content=0,probe=0;
+ for(let y=top+2;y<bottom-1;y+=8)for(let x=left+2;x<right-1;x+=8){
+  probe++;if(!bright(x,y))content++;
+ }
+ if(!probe||content/probe<.13)return null;
+ return {x:left/192,y:top/192,w:w/192,h:h/192};
+}
+function prepare(img){
+ const bounds=whiteBounds(img);
+ return {full:sample(img),center:sample(img,true),
+   trimmed:bounds?sample(img,false,bounds):null,
+   trimmedCenter:bounds?sample(img,true,bounds):null,
+   borderTrimmed:!!bounds};
+}
+function sample(img,crop=false,bounds=null){
  const c=document.createElement('canvas');c.width=c.height=32;
  const cx=c.getContext('2d',{willReadFrequently:true});cx.fillStyle='#fff';cx.fillRect(0,0,32,32);
- const iw=img.naturalWidth||img.width,ih=img.naturalHeight||img.height,w=crop?iw*.8:iw,h=crop?ih*.8:ih;
- cx.drawImage(img,(iw-w)/2,(ih-h)/2,w,h,0,0,32,32);
+ const iw=img.naturalWidth||img.width,ih=img.naturalHeight||img.height;
+ const rect=bounds||{x:0,y:0,w:1,h:1};
+ const rw=iw*rect.w,rh=ih*rect.h,w=crop?rw*.8:rw,h=crop?rh*.8:rh;
+ cx.drawImage(img,iw*rect.x+(rw-w)/2,ih*rect.y+(rh-h)/2,w,h,0,0,32,32);
  const pixels=cx.getImageData(0,0,32,32).data,rgb=new Uint8Array(3072),gray=new Float32Array(1024),hist=new Float32Array(24);
  for(let i=0;i<1024;i++){
    const j=i*4,k=i*3,r=pixels[j],g=pixels[j+1],b=pixels[j+2];
@@ -90,10 +126,22 @@ function similarityOne(a,b){
  return {score:Math.round(clamp100(score)*10)/10,pix,hash,col,structure,edges,dhash};
 }
 function compare(a,b){
- const full=similarityOne(a.full,b.full),center=similarityOne(a.center,b.center);
- const winner=center.score*.97>full.score?{...center,score:Math.round(center.score*9.7)/10,area:'中心裁切'}:{...full,area:'全圖'};
- // Don't let harsh edge thresholds hide photos with consistent content/layout.
- const reg=Math.max(registeredStructure(a.full,b.full),registeredStructure(a.center,b.center));
+ const candidates=[
+  [a.full,b.full,'全圖',1],
+  [a.center,b.center,'中心裁切',.97]
+ ];
+ if(a.trimmed&&b.trimmed)candidates.push([a.trimmed,b.trimmed,'雙圖去白邊',.99]);
+ if(a.trimmed&&b.full)candidates.push([a.trimmed,b.full,'A 去白邊／B 全圖',.95]);
+ if(a.full&&b.trimmed)candidates.push([a.full,b.trimmed,'A 全圖／B 去白邊',.95]);
+ if(a.trimmedCenter&&b.trimmedCenter)candidates.push([a.trimmedCenter,b.trimmedCenter,'去白邊後中心區',.96]);
+ let best=null,reg=0;
+ for(const [left,right,area,weight] of candidates){
+  const raw=similarityOne(left,right),alignment=registeredStructure(left,right);
+  reg=Math.max(reg,alignment);
+  const score=Math.round(raw.score*weight*10)/10;
+  if(!best||score>best.score)best={...raw,score,area};
+ }
+ const winner=best;
  const strongEvidence=(winner.pix>=87&&winner.hash>=76&&
   (winner.structure>=68||reg>=76)&&(winner.edges>=25||reg>=83))||
   (winner.pix>=84&&reg>=90&&winner.hash>=72);
@@ -102,7 +150,8 @@ function compare(a,b){
    .11*(reg-60)+.07*(winner.pix-85);
   winner.score=Math.round(clamp100(Math.max(winner.score,Math.min(97,corroborated)))*10)/10;
  }
- return {...winner,registered:Math.round(reg*10)/10,strongEvidence};
+ return {...winner,registered:Math.round(reg*10)/10,strongEvidence,
+  borderTrimmed:!!(a.borderTrimmed||b.borderTrimmed)};
 }
 
 function rule(m){
@@ -120,5 +169,5 @@ function rule(m){
  '\\n3. 建議查證：取得原始照片／EXIF、拍攝日期、施工位置、施工日誌、估驗計價與驗收資料。相似度不代表違規機率，不得只憑影像認定重複請款。';
 }
 
-global.ImageAuditComparator={version:'2.4.0',sample,compare,similarityOne,registeredStructure,rule};
+global.ImageAuditComparator={version:'2.5.0',sample,prepare,whiteBounds,compare,similarityOne,registeredStructure,rule};
 })(typeof window!=='undefined'?window:globalThis);
