@@ -22,7 +22,7 @@ async function verify(page){
  assert.equal(got.thumb,'blob:compressed-thumbnail');
  assert.equal(calls.join('|'),'decode-original|sample-full|sample-center|closed-original|encode-thumb','Thumb generated before raw scoring');
  assert.ok(!src.includes('full:sample(img),center:sample(img,true)'),'Old lossy scoring still in page');
- assert.ok(src.includes('v2.3.0'),'Build and version must be traceable');
+ assert.ok(src.includes('v2.4.0'),'Build and version must be traceable');
 }
 (async()=>{
  await verify('online/index.html');
