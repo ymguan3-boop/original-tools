@@ -63,7 +63,7 @@ interface ImageFolder {
 }
 
 interface VisualMetrics { score:number; pix:number; hash:number; structure:number; edges:number; registered:number; col:number; strongEvidence:boolean; }
-interface VisualComparator { sample:(bitmap:ImageBitmap,crop?:boolean)=>unknown; compare:(a:{full:unknown;center:unknown},b:{full:unknown;center:unknown})=>VisualMetrics; rule:(metrics:VisualMetrics)=>string; }
+interface VisualComparator { sample:(bitmap:ImageBitmap,crop?:boolean)=>unknown; prepare:(bitmap:ImageBitmap)=>{full:unknown;center:unknown;trimmed?:unknown;trimmedCenter?:unknown;borderTrimmed?:boolean}; compare:(a:{full:unknown;center:unknown;trimmed?:unknown;trimmedCenter?:unknown},b:{full:unknown;center:unknown;trimmed?:unknown;trimmedCenter?:unknown})=>VisualMetrics; rule:(metrics:VisualMetrics)=>string; }
 interface MatchItem {
   id: string;
   score: number;
@@ -518,11 +518,11 @@ const App = () => {
       /* Shared browser comparator: same image samples and formula as the online edition. */
       const common=(window as unknown as {ImageAuditComparator?:VisualComparator}).ImageAuditComparator;
       if(!common)throw new Error('共用視覺比對引擎 comparator-core.js 未載入');
-      const visualFeatures:Array<{full:unknown;center:unknown}|null>=new Array(files.length).fill(null);
+      const visualFeatures:Array<{full:unknown;center:unknown;trimmed?:unknown;trimmedCenter?:unknown;borderTrimmed?:boolean}|null>=new Array(files.length).fill(null);
       for(let i=0;i<files.length;i++){
         if(stopRef.current)return;
         const bitmap=await createImageBitmap(files[i]);
-        try{visualFeatures[i]={full:common.sample(bitmap),center:common.sample(bitmap,true)}}
+        try{visualFeatures[i]=common.prepare(bitmap)}
         finally{bitmap.close()}
         if(i%12===0){setProgress({stage:'建立跨版本共同視覺特徵',done:i+1,total:files.length});await sleep(0)}
       }
