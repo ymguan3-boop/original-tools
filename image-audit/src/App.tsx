@@ -207,6 +207,24 @@ const fullUrl = (file: File): string => {
   return url;
 };
 
+type StandardReportAPI={
+  prompt:()=>string;
+  extractContent:(data:unknown)=>string;
+  formatAI:(text:string,context:Record<string,unknown>)=>string;
+  formatRule:(context:Record<string,unknown>)=>string;
+};
+const reportAPI=():StandardReportAPI=>{
+ const api=(window as Window & {ImageAuditReportStandard?:StandardReportAPI}).ImageAuditReportStandard;
+ if(!api)throw Error('共用查核報告模組未載入（report-standard.js），請更新完整桌面版。');
+ return api;
+};
+const reportContext=(item:MatchItem,model?:string,reason?:string):Record<string,unknown>=>({
+ score:item.score,visual:item.visual,dino:item.dino,
+ patchSimilarity:item.patchSimilarity,
+ identical:item.advanced?.status==='byte-identical',
+ model,reason
+});
+
 /* --------------------------- 相似度分區設定 --------------------------- */
 
 const RANGE_CONFIG: RangeConfig[] = [
@@ -219,13 +237,8 @@ const RANGE_CONFIG: RangeConfig[] = [
 ];
 
 /** Rules for audit triage. Do not interpret cosine scores as legal or duplicate probabilities. */
-const buildRuleText = (item: MatchItem): string => {
-  const shared=(window as unknown as {ImageAuditComparator?:VisualComparator}).ImageAuditComparator;
-  const common=shared?.rule(item.visual) || '照片需人工核對原始檔案及拍攝情形。';
-  return common+'\n4. DINOv2 輔助：'+(item.dino===null?'未取得特徵向量':'特徵餘弦相似度 '+item.dino.toFixed(1)+'%')+
-  '；64×64 中心區像素相似度 '+item.pixel.toFixed(2)+'%。DINOv2 不參與跨版本共同篩選分數，不得將語意相似度直接解讀為同一張照片的機率。'+
-  (item.advanced?'\n5. 進階查核：'+advancedSummary(item.advanced):'');
-};
+const buildRuleText = (item: MatchItem, reason?:string): string =>
+  reportAPI().formatRule(reportContext(item,undefined,reason));
 
 const isFatalApiError = (error: ApiError): boolean =>
   [401, 402, 403, 404, 429].includes(error.status ?? -1);
@@ -741,8 +754,7 @@ const App = () => {
       messages: [
         {
           role: 'system',
-          content:
-            '你是嚴謹的工程影像稽核專家。只能依據圖片中實際可見的內容作答，不臆測、不編造，並使用繁體中文。',
+          content: '你是中立的工程照片雙圖觀察員。只能描述影像中明確可見的資訊，必須按指定 JSON 格式回答，不得認定違法或改動數值。',
         },
         {
           role: 'user',
@@ -793,9 +805,8 @@ const App = () => {
 
       if (res.ok) {
         const message = data?.choices?.[0]?.message;
-        const content: string | undefined = message?.content;
-        if (content && content.trim()) return content.trim();
-        if (typeof message?.reasoning === 'string' && message.reasoning.trim()) return message.reasoning.trim();
+        const content=reportAPI().extractContent(data);
+        if(content.trim())return content.trim();
         throw new Error('模型未回傳內容（可能達到 token 上限或觸發安全過濾），請重試或換一個模型。');
       }
 
@@ -826,10 +837,10 @@ const App = () => {
   const runGenerateText = async () => {
     if (results.length === 0) return alert('無資料可分析');
 
-    const targets = results.filter((r) => r.analysis === null);
-    if (targets.length === 0) return alert('目前清單所有項目皆已包含差異說明。');
-
     const useAi = apiKey.trim().length > 0 && topN > 0;
+    // A previously generated rules-only report may be upgraded to OpenRouter observations.
+    const targets = results.filter((r) => !r.analysis || (useAi && r.analysisSource !== 'ai'));
+    if (targets.length === 0) return alert('目前清單已包含全部可用的查核說明。');
     const ranked = [...targets].sort((a, b) => primaryScore(b) - primaryScore(a));
     const aiIds = new Set(useAi ? ranked.slice(0, topN).map((t) => t.id) : []);
 
@@ -851,23 +862,12 @@ const App = () => {
         continue;
       }
 
-      const scoreInfo =
-        item.dino !== null
-          ? `跨版本共同視覺相似度為 ${item.score}%；另 DINOv2 輔助特徵為 ${item.dino}%、64×64 像素為 ${item.pixel}%（均不是違規機率）。`
-          : `共用視覺相似度為 ${item.score}%，64×64 像素相似度為 ${item.pixel}%（未取得 DINOv2 特徵），僅供參考，仍請以實際看到的內容為準。`;
-
-      const prompt = `你是專業工程稽核員。第一張圖為 A 組（${item.sourceA}），第二張圖為 B 組（${item.sourceB}）。
-${scoreInfo}
-
-請比對這兩張工程照片，直接依序輸出以下兩點：
-1. 差異度說明：（例如「完全相同」、「角度略微偏移」、「光線或天候不同」、「背景物件增減」或「疑似裁切或變造」）
-2. 查核研判：（描述疑似同源、局部相似或證據不足，不得直接斷言不同來源、重複請款或違規）
-3. 待查證事項：（原始照片、拍攝時間、施作位置、估驗計價及驗收資料）
-
-不要輸出分數、不要重述題目、不要客套語。`;
+      const prompt = reportAPI().prompt();
 
       try {
-        const text = await callOpenRouter(prompt, item);
+        const raw = await callOpenRouter(prompt, item);
+        // Malformed or partial visual-model responses are never silently labeled as AI conclusions.
+        const text = reportAPI().formatAI(raw,reportContext(item,model));
         setResults((prev) =>
           prev.map((r) => (r.id === item.id ? { ...r, analysis: text, analysisSource: 'ai' } : r))
         );
@@ -880,7 +880,7 @@ ${scoreInfo}
           aborted = true;
           break;
         }
-        const fallback = buildRuleText(item);
+        const fallback = buildRuleText(item,'OpenRouter 回傳失敗或格式不符，已使用規則模板');
         setResults((prev) =>
           prev.map((r) => (r.id === item.id ? { ...r, analysis: fallback, analysisSource: 'rule' } : r))
         );
@@ -942,7 +942,7 @@ ${scoreInfo}
           filenameA:item.fileA.name,filenameB:item.fileB.name,
           imageA,imageB,
           analysis:(item.analysis||buildRuleText(item))+(item.advanced&&!(item.analysis||'').includes('進階查核')?'\n【進階局部驗證】'+advancedSummary(item.advanced):''),
-          analysisSource:item.analysisSource==='ai'?'AI 分析':'規則判定'
+          analysisSource:item.analysisSource==='ai'?'OpenRouter AI':'本機規則模板'
         });
       }
       const blob = await writer.create({
