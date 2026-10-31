@@ -1050,6 +1050,13 @@ const App = () => {
             <p className="mt-2 text-xs text-slate-500">進階驗證僅對點選的組別執行，不改動全批次排序、分數或快速篩選。仍須人工查核原始照片、施工日誌、拍攝時間與驗收資料。</p>
           </details>
 
+          <details className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 text-sm leading-7">
+            <summary className="font-bold text-indigo-800 cursor-pointer">查核報告的一致化規則（OpenRouter 與本機規則共用）</summary>
+            <p className="mt-2 text-xs text-slate-700">兩種來源都固定輸出六段：① 照片可見相同點、② 可見差異、③ 客觀比對證據、④ 查核研判、⑤ 待查證事項、⑥ 來源與判讀限制。</p>
+            <p className="mt-1 text-xs text-slate-700">OpenRouter 只負責描述雙圖可見內容；第三段分數由本機分析填入，不接受模型改動。系統判讀與 AI 觀察推論分別標示，不能直接據此認定違規或重複請款。</p>
+            <p className="mt-1 text-xs text-slate-700">每組均記錄使用方式及時間；OpenRouter 組別另外標示實際模型。AI 格式錯誤或無內容時明確回退規則模板。先做規則說明後，仍可使用 OpenRouter 補充視覺觀察，無須重新比對照片。</p>
+          </details>
+
           {/* 引擎二：OpenRouter 文字說明（選配） */}
           <div className="flex flex-col lg:flex-row gap-3 lg:items-center bg-indigo-50/60 border border-indigo-100 rounded-lg p-3">
             <div className="flex items-center gap-2 shrink-0">
