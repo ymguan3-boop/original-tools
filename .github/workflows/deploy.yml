@@ -63,6 +63,9 @@ jobs:
         run: |
           node image-audit/tests/test-docx.cjs
 
+      - name: Test offline advanced geometry and SSIM (synthetic images)
+        run: node image-audit/tests/test-advanced-vision.cjs
+
       - name: Test audit triage and safer photo imports
         run: node image-audit/tests/test-audit-evidence.cjs
 
