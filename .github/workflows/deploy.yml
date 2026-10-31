@@ -78,6 +78,9 @@ jobs:
       - name: Test browser image scoring (false positives and near duplicates)
         run: node image-audit/tests/test-comparator.cjs
 
+      - name: Test original-file input parity and desktop forensic report
+        run: node image-audit/tests/test-preprocessing-parity.cjs
+
       - name: Test Windows desktop HTTP route handling
         env:
           GO111MODULE: "off"
