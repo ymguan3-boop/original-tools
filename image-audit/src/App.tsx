@@ -7,6 +7,8 @@ import {
   SquareStack,
 } from 'lucide-react';
 import { getDinoClient } from './dinoClient';
+import { advancedCompare } from './advancedVision';
+import type { AdvancedResult } from './advancedVision';
 import type { ModelState } from './dinoClient';
 import { assessPhotoEvidence, buildAuditRule } from './auditEvidence';
 import { getCached, setCached, clearEmbedCache, countCached } from './embedCache';
@@ -64,7 +66,9 @@ interface MatchItem {
   id: string;
   score: number;
   visual:VisualMetrics;
-  /** DINOv2 特徵相似度 0~100（主要分數；模型不可用時為 null） */
+  advanced?:AdvancedResult;
+  patchSimilarity?:number|null;
+  /** DINOv2 輔助特徵餘弦分數；不影響共同篩選門檻 */
   dino: number | null;
   /** 像素相似度 0~100（輔助參考） */
   pixel: number;
@@ -128,6 +132,27 @@ const pixelSimilarity = (a: Uint8ClampedArray, b: Uint8ClampedArray): number => 
 };
 
 /** 檔案內容雜湊：用來偵測「位元組完全相同」的檔案，直接沿用分析結果避免重複推論 */
+const localPatchScore=(a:Float32Array|null,b:Float32Array|null):number|null=>{
+ if(!a||!b||a.length!==b.length||a.length%16!==0)return null;
+ const d=a.length/16;let total=0;
+ for(let ay=0;ay<4;ay++)for(let ax=0;ax<4;ax++){
+   const k=ay*4+ax;let best=-1;
+   for(let by=Math.max(0,ay-1);by<=Math.min(3,ay+1);by++)
+    for(let bx=Math.max(0,ax-1);bx<=Math.min(3,ax+1);bx++){
+      let cosine=0,idx=(by*4+bx)*d;
+      for(let j=0;j<d;j++)cosine+=a[k*d+j]*b[idx+j];
+      best=Math.max(best,cosine);
+    }
+   total+=best;
+ }
+ return Math.round(1000*Math.max(0,Math.min(1,total/16)))/10;
+};
+const advancedSummary=(v:AdvancedResult):string=>
+ '局部特徵驗證：'+v.label+'；匹配 '+v.matches+' 點、幾何內點 '+v.inliers+' 點、內點比例 '+v.inlierRatio+
+ '%、空間覆蓋 '+v.coverage+'%、對齊 SSIM '+(v.alignedSSIM==null?'不足以計算':v.alignedSSIM.toFixed(1)+'%')+
+ '、差異像素區域 '+(v.differenceArea==null?'未取得':v.differenceArea.toFixed(1)+'%')+
+ (v.patchSimilarity==null?'；DINOv2 局部特徵：目前模型輸出不支援':'；DINOv2 局部 Patch '+v.patchSimilarity.toFixed(1)+'%')+
+ '。'+v.note;
 const contentHash = async (file: File): Promise<string | null> => {
   try {
     if (!globalThis.crypto?.subtle) return null;
@@ -198,7 +223,8 @@ const buildRuleText = (item: MatchItem): string => {
   const shared=(window as unknown as {ImageAuditComparator?:VisualComparator}).ImageAuditComparator;
   const common=shared?.rule(item.visual) || '照片需人工核對原始檔案及拍攝情形。';
   return common+'\n4. DINOv2 輔助：'+(item.dino===null?'未取得特徵向量':'特徵餘弦相似度 '+item.dino.toFixed(1)+'%')+
-  '；64×64 中心區像素相似度 '+item.pixel.toFixed(2)+'%。DINOv2 不參與跨版本共同篩選分數，不得將語意相似度直接解讀為同一張照片的機率。';
+  '；64×64 中心區像素相似度 '+item.pixel.toFixed(2)+'%。DINOv2 不參與跨版本共同篩選分數，不得將語意相似度直接解讀為同一張照片的機率。'+
+  (item.advanced?'\n5. 進階查核：'+advancedSummary(item.advanced):'');
 };
 
 const isFatalApiError = (error: ApiError): boolean =>
@@ -228,6 +254,7 @@ const App = () => {
   const [results, setResults] = useState<MatchItem[]>([]);
   const [selectedRanges, setSelectedRanges] = useState<Set<string>>(new Set());
   const [selectedResult, setSelectedResult] = useState<MatchItem | null>(null);
+  const [advancedBusy,setAdvancedBusy] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [notice, setNotice] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{title:string;message:string;type:'success'|'warning'} | null>(null);
@@ -407,6 +434,7 @@ const App = () => {
     const thumbs: string[] = new Array(files.length).fill('');
     const sigs: (Uint8ClampedArray | null)[] = new Array(files.length).fill(null);
     const embeddings: (Float32Array | null)[] = new Array(files.length).fill(null);
+    const patches:(Float32Array|null)[] = new Array(files.length).fill(null);
 
     const client = getDinoClient();
 
@@ -434,6 +462,7 @@ const App = () => {
         if (twin !== undefined) {
           sigs[i] = sigs[twin];
           embeddings[i] = embeddings[twin];
+          patches[i] = patches[twin];
           thumbs[i] = thumbs[twin];
           reused++;
           setProgress({ stage: `分析照片 ${i + 1} / ${files.length}（內容相同，沿用結果）`, done: i + 1, total: files.length });
@@ -448,6 +477,7 @@ const App = () => {
           if (cached) {
             sigs[i] = cached.sig;
             embeddings[i] = cached.embedding;
+            patches[i] = cached.patch??null;
             thumbs[i] = URL.createObjectURL(cached.thumb);
             hashToIndex.set(hash, i);
             cachedHitCount++;
@@ -463,6 +493,7 @@ const App = () => {
         if (item) {
           sigs[item.id] = item.sig;
           embeddings[item.id] = item.embedding;
+          patches[item.id] = item.patch??null;
           thumbs[item.id] = URL.createObjectURL(item.thumb);
           // 成功取得向量才寫入快取
           if (hash && item.embedding) {
@@ -470,6 +501,7 @@ const App = () => {
               hash,
               sig: item.sig,
               embedding: item.embedding,
+              patch:item.patch,
               thumb: item.thumb,
               createdAt: Date.now(),
             });
@@ -529,12 +561,14 @@ const App = () => {
               if(!va||!vb)continue;
               const visual=common.compare(va,vb);
               const score=visual.score;
+              const patchSimilarity=localPatchScore(patches[fa],patches[fb]);
               if(score<listThreshold)continue;
 
               matches.push({
                 id: `${folderIds[a]}-${folderIds[b]}-${fa}-${fb}`,
                 score,
                 visual,
+                patchSimilarity,
                 dino,
                 pixel,
                 fileA: files[fa],
@@ -826,7 +860,8 @@ ${scoreInfo}
 
 請比對這兩張工程照片，直接依序輸出以下兩點：
 1. 差異度說明：（例如「完全相同」、「角度略微偏移」、「光線或天候不同」、「背景物件增減」或「疑似裁切或變造」）
-2. 分析結論：（一句話下結論，例如「極可能為重複請款」、「為同一地點不同時間拍攝」或「不同照片」）
+2. 查核研判：（描述疑似同源、局部相似或證據不足，不得直接斷言不同來源、重複請款或違規）
+3. 待查證事項：（原始照片、拍攝時間、施作位置、估驗計價及驗收資料）
 
 不要輸出分數、不要重述題目、不要客套語。`;
 
