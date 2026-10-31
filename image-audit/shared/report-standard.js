@@ -52,7 +52,7 @@ function evidence(c){
  const v=c.visual||{},a=c.advanced;
  const out=[
   '【共同快速影像比對】',
-  '1. 共同視覺分數：'+number(c.score)+'；依 pHash、dHash、明暗結構與邊緣等特徵產生，是查核排序分數，非同源機率。',
+  '1. 共同視覺相似度：'+number(c.score)+'；依 pHash、dHash、明暗結構與邊緣等特徵產生，是查核排序分數，非同源機率。',
   '2. pHash（頻率構圖）：'+number(c.hash??v.hash)+'；dHash（亮暗變化）：'+number(c.dhash??v.dhash)+'。',
   '3. 明暗結構：'+number(c.structure??v.structure)+'；邊緣一致性：'+number(c.edges??v.edges)+'；位置校正：'+number(c.registered??v.registered)+'。',
   '4. 像素：'+number(c.pix??v.pix)+'；色彩：'+number(c.col??v.col)+'，僅用作輔助查核。'
