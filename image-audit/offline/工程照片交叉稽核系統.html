@@ -13,8 +13,8 @@
 <body>
 <header><span class="pill">桌面免安裝版 · HTML 可直接開啟</span><h1>工程照片交叉稽核系統</h1><div class="sub">跨資料夾照片比對 · 風險初篩 · 差異說明 · Word 查核報告</div></header>
 <main class="wrap">
-<div class="panel"><div class="row between"><strong>使用環境</strong><span id="env" class="pill">偵測中</span></div><p class="muted">本版本不需 Python、Node.js、伺服器或安裝程式。所有<strong>照片相似度運算在本機瀏覽器</strong>完成；不會自動上傳照片。可選擇使用 OpenRouter 線上 AI 文字解說（需網路、金鑰及明確授權，會將選取的縮圖送往第三方）。</p><div class="warning">重要：為了支援直接雙擊 HTML，本版採用離線像素、感知雜湊與色彩特徵組合進行初篩，<strong>不是</strong>線上版的 DINOv2 語意模型。相似度只是稽核線索，須由人員核對現場、日期、合約及驗收資料，不可直接認定重複請款。</div></div>
-<section class="panel"><div class="step">步驟 1 · 匯入並比對</div><h2>匯入工程照片資料夾</h2><div class="row"><button class="btn" id="addFolder">＋ 加入資料夾</button><button class="btn secondary" id="addFiles">＋ 加入照片群組</button><button class="btn secondary" id="clearFolders">清空資料夾</button><input id="folderInput" type="file" accept="image/*" webkitdirectory directory multiple hidden><input id="fileInput" type="file" accept="image/*" multiple hidden></div><p class="muted">依序加入至少 2 個工程照片資料夾（或照片群組）；只比較不同群組的照片。支援 JPG、PNG、WebP、BMP 及瀏覽器可解碼的圖片。大批照片比對需要較多時間。</p><div id="folders"><p class="hint">尚未加入資料夾。</p></div><div class="row" style="margin-top:16px"><div class="field narrow"><label for="threshold">列出門檻：<strong id="thresholdVal">78%</strong></label><input id="threshold" type="range" min="50" max="100" value="78"></div><button class="btn" id="run">開始交叉比對</button><button class="btn warn" id="stop" disabled>停止</button></div><div id="progressWrap" class="hidden"><div class="progress"><div id="progressBar"></div></div><div class="hint" id="progressText" aria-live="polite"></div></div><p id="message" class="muted" role="status"></p></section>
+<div class="panel"><div class="row between"><strong>使用環境</strong><span id="env" class="pill">偵測中</span></div><p class="muted">本版本不需 Python、Node.js、伺服器或安裝程式。所有<strong>照片相似度運算在本機瀏覽器</strong>完成；不會自動上傳照片。可選擇使用 OpenRouter 線上 AI 文字解說（需網路、金鑰及明確授權，會將選取的縮圖送往第三方）。</p><div class="warning">重要：為了支援直接雙擊 HTML，本版採用離線pHash／dHash 感知雜湊、明暗結構相關性及邊緣一致性進行交叉驗證，<strong>不是</strong>線上版的 DINOv2 語意模型。相似度只是稽核線索，須由人員核對現場、日期、合約及驗收資料，不可直接認定重複請款。</div></div>
+<section class="panel"><div class="step">步驟 1 · 匯入並比對</div><h2>匯入工程照片資料夾</h2><div class="row"><button class="btn" id="addFolder">＋ 加入資料夾</button><button class="btn secondary" id="addFiles">＋ 加入照片群組</button><button class="btn secondary" id="clearFolders">清空資料夾</button><input id="folderInput" type="file" accept="image/*" webkitdirectory directory multiple hidden><input id="fileInput" type="file" accept="image/*" multiple hidden></div><p class="muted">依序加入至少 2 個工程照片資料夾（或照片群組）；只比較不同群組的照片。支援 JPG、PNG、WebP、BMP 及瀏覽器可解碼的圖片。大批照片比對需要較多時間。</p><div id="folders"><p class="hint">尚未加入資料夾。</p></div><div class="row" style="margin-top:16px"><div class="field narrow"><label for="threshold">列出門檻：<strong id="thresholdVal">85%</strong></label><input id="threshold" type="range" min="50" max="100" value="85"></div><button class="btn" id="run">開始交叉比對</button><button class="btn warn" id="stop" disabled>停止</button></div><div id="progressWrap" class="hidden"><div class="progress"><div id="progressBar"></div></div><div class="hint" id="progressText" aria-live="polite"></div></div><p id="message" class="muted" role="status"></p></section>
 <section class="panel"><div class="step">步驟 2 · 產生說明</div><h2>差異分析與文字結論</h2><div class="row"><button class="btn secondary" id="notes">產生全部規則說明</button><div class="field"><label for="apiKey">OpenRouter API Key（選填，不會儲存）</label><input id="apiKey" type="password" autocomplete="off" placeholder="sk-or-v1-…"></div><div class="field narrow"><label for="model">視覺模型 ID</label><input id="model" type="text" value="openrouter/free"></div><div class="field narrow"><label for="topN">AI 分析前幾組</label><input id="topN" type="number" min="1" max="100" value="5"></div></div><div class="row" style="margin-top:11px"><label><input type="checkbox" id="consent"> 我同意將所選照片的縮圖傳送到 OpenRouter 及其模型供應商</label><button class="btn secondary" id="aiRun">以線上 AI 產生前 N 組說明</button></div><p class="muted">不填金鑰即可離線產生全部規則說明。使用 AI 時需要網路；若服務不接受本機 HTML 的跨來源請求，會提示失敗並保留離線說明。<strong>請勿將包含敏感資訊的公務照片送至外部 AI，除非已獲授權。</strong></p></section>
 <section class="panel"><div class="step">步驟 3 · 檢視與匯出</div><div class="row between"><h2 style="margin:0">交叉比對結果</h2><div class="row"><button class="btn secondary" id="csv">匯出 CSV</button><button class="btn" id="word">匯出 Word 查核報告</button></div></div><p class="muted">Word 檔為可由 Word 開啟的 HTML 格式 <code>.doc</code>，含雙圖、分數、文字差異與查核提醒。若 Word 顯示格式提示，請確認其為本機自行匯出的文件。</p><div id="stats" class="stats"></div><div id="matches"><p class="hint">尚無比對結果。</p></div><div class="row between" style="margin-top:14px"><span class="hint" id="pageLabel"></span><div class="row"><button class="smallbtn" id="prev">上一頁</button><button class="smallbtn" id="next">下一頁</button></div></div></section>
 <footer>工程照片交叉稽核系統 · 桌面 HTML 離線版 · 創作人 官毅明 · 本機運算優先</footer>
@@ -37,10 +37,79 @@ $('fileInput').onchange=e=>{const f=Array.from(e.target.files||[]);if(f.length){
 $('clearFolders').onclick=()=>{if(S.busy)return;S.groups=[];resetResults();drawFolders();message('已清空。')};
 $('threshold').oninput=()=>{$('thresholdVal').textContent=$('threshold').value+'%';S.page=0;drawResults()};
 function imgData(file,max=390,quality=.7){return new Promise((resolve,reject)=>{const url=URL.createObjectURL(file),img=new Image();img.onload=()=>{try{let k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)),w=Math.max(1,Math.round(img.naturalWidth*k)),h=Math.max(1,Math.round(img.naturalHeight*k));const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);resolve({url:c.toDataURL('image/jpeg',quality),img,canvas:c})}catch(e){reject(e)}finally{URL.revokeObjectURL(url)}};img.onerror=()=>{URL.revokeObjectURL(url);reject(Error('圖片讀取失敗：'+file.name))};img.src=url})}
-function sample(img,crop=false){const c=document.createElement('canvas');c.width=c.height=32;const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,32,32);let iw=img.naturalWidth,ih=img.naturalHeight,offX=0,offY=0,w=iw,h=ih;if(crop){w=iw*.8;h=ih*.8;offX=(iw-w)/2;offY=(ih-h)/2}x.drawImage(img,offX,offY,w,h,0,0,32,32);const rgba=x.getImageData(0,0,32,32).data;const rgb=new Uint8Array(32*32*3),hist=new Float32Array(24);let q=0;for(let i=0;i<rgba.length;i+=4){for(let j=0;j<3;j++){const v=rgba[i+j];rgb[q++]=v;hist[j*8+Math.min(7,v>>5)]++}}for(let i=0;i<24;i++)hist[i]/=1024;const hc=document.createElement('canvas');hc.width=9;hc.height=8;const hx=hc.getContext('2d',{willReadFrequently:true});hx.drawImage(img,offX,offY,w,h,0,0,9,8);const hpx=hx.getImageData(0,0,9,8).data;const hash=new Uint8Array(64);for(let y=0;y<8;y++)for(let xx=0;xx<8;xx++){const a=(y*9+xx)*4,b=a+4;hash[y*8+xx]=(hpx[a]*.299+hpx[a+1]*.587+hpx[a+2]*.114)>(hpx[b]*.299+hpx[b+1]*.587+hpx[b+2]*.114)?1:0}return {rgb,hist,hash}}
+// Conservative multi-evidence near-duplicate scoring (2026-10).
+// Inspired by ImageHash pHash/dHash and spatial verification, not a semantic model.
+// Photographs that merely share gray tones must NOT receive a high score.
+const DCT_COS=Array.from({length:8},(_,u)=>Float64Array.from({length:32},(_,x)=>Math.cos(Math.PI*(2*x+1)*u/64)));
+const clamp100=x=>Math.max(0,Math.min(100,x));
+function sample(img,crop=false){
+ const c=document.createElement('canvas');c.width=c.height=32;
+ const cx=c.getContext('2d',{willReadFrequently:true});cx.fillStyle='#fff';cx.fillRect(0,0,32,32);
+ const iw=img.naturalWidth,ih=img.naturalHeight,w=crop?iw*.8:iw,h=crop?ih*.8:ih;
+ cx.drawImage(img,(iw-w)/2,(ih-h)/2,w,h,0,0,32,32);
+ const pixels=cx.getImageData(0,0,32,32).data,rgb=new Uint8Array(3072),gray=new Float32Array(1024),hist=new Float32Array(24);
+ for(let i=0;i<1024;i++){
+   const j=i*4,k=i*3,r=pixels[j],g=pixels[j+1],b=pixels[j+2];
+   rgb[k]=r;rgb[k+1]=g;rgb[k+2]=b;
+   hist[Math.min(7,r>>5)]++;hist[8+Math.min(7,g>>5)]++;hist[16+Math.min(7,b>>5)]++;
+   gray[i]=r*.299+g*.587+b*.114;
+ }
+ for(let i=0;i<hist.length;i++)hist[i]/=1024;
+ const hash=new Uint8Array(64);
+ for(let y=0;y<8;y++)for(let x=0;x<8;x++){
+   const yy=Math.min(31,Math.floor((y+.5)*4)),ax=Math.min(31,Math.floor((x+.5)*32/9)),bx=Math.min(31,Math.floor((x+1.5)*32/9));
+   hash[y*8+x]=gray[yy*32+ax]>gray[yy*32+bx]?1:0;
+ }
+ // pHash: 2D discrete cosine transform, 8x8 low-frequency AC bits.
+ const tmp=new Float64Array(256),ac=new Float64Array(64);
+ for(let u=0;u<8;u++)for(let y=0;y<32;y++){
+   let sum=0;for(let x=0;x<32;x++)sum+=gray[y*32+x]*DCT_COS[u][x];
+   tmp[u*32+y]=sum;
+ }
+ for(let u=0;u<8;u++)for(let v=0;v<8;v++){
+   let sum=0;for(let y=0;y<32;y++)sum+=tmp[u*32+y]*DCT_COS[v][y];
+   ac[u*8+v]=sum;
+ }
+ const median=Array.from(ac.slice(1)).sort((a,b)=>a-b)[31];
+ const phash=Uint8Array.from(ac.slice(1),v=>v>median?1:0);
+ return {rgb,gray,hist,hash,phash};
+}
 function feature(f){return imgData(f).then(({url,img})=>({file:f,thumb:url,full:sample(img),center:sample(img,true)}))}
-function similarityOne(a,b){let diff=0,equal=0,hist=0;for(let i=0;i<a.rgb.length;i++)diff+=Math.abs(a.rgb[i]-b.rgb[i]);for(let i=0;i<64;i++)if(a.hash[i]===b.hash[i])equal++;for(let i=0;i<24;i++)hist+=Math.min(a.hist[i],b.hist[i]);const pix=100*(1-diff/(a.rgb.length*255)),hash=100*equal/64,col=100*hist/3;return {score:Math.max(0,Math.min(100,pix*.62+hash*.23+col*.15)),pix,hash,col}}
-function compare(a,b){const full=similarityOne(a.full,b.full),center=similarityOne(a.center,b.center);const score=Math.max(full.score,center.score*.985);return {score,pix:full.pix,hash:full.hash,col:full.col}}
+function similarityOne(a,b){
+ let diff=0,overlap=0,sameP=0,sameD=0,ma=0,mb=0;
+ for(let i=0;i<3072;i++)diff+=Math.abs(a.rgb[i]-b.rgb[i]);
+ for(let i=0;i<24;i++)overlap+=Math.min(a.hist[i],b.hist[i]);
+ for(let i=0;i<63;i++)sameP+=a.phash[i]===b.phash[i]?1:0;
+ for(let i=0;i<64;i++)sameD+=a.hash[i]===b.hash[i]?1:0;
+ for(let i=0;i<1024;i++){ma+=a.gray[i];mb+=b.gray[i]}
+ ma/=1024;mb/=1024;
+ let cross=0,va=0,vb=0,edgeCross=0,edgeA=0,edgeB=0;
+ for(let y=0;y<32;y++)for(let x=0;x<32;x++){
+   const i=y*32+x,da=a.gray[i]-ma,db=b.gray[i]-mb;
+   cross+=da*db;va+=da*da;vb+=db*db;
+   if(x===0||y===0||x===31||y===31)continue;
+   const ax=a.gray[i+1]-a.gray[i-1],ay=a.gray[i+32]-a.gray[i-32];
+   const bx=b.gray[i+1]-b.gray[i-1],by=b.gray[i+32]-b.gray[i-32];
+   edgeCross+=ax*bx+ay*by;edgeA+=ax*ax+ay*ay;edgeB+=bx*bx+by*by;
+ }
+ const pix=100*(1-diff/(3072*255)),hash=100*sameP/63,col=100*overlap/3;
+ const dhash=100*sameD/64;
+ const corr=va>1&&vb>1?cross/Math.sqrt(va*vb):0;
+ const edgeCorr=edgeA>1&&edgeB>1?edgeCross/Math.sqrt(edgeA*edgeB):0;
+ const structure=clamp100((corr-.12)/.88*100),edges=clamp100((edgeCorr-.1)/.9*100);
+ const pEvidence=clamp100((hash-55)/45*100),dEvidence=clamp100((dhash-55)/45*100);
+ let score=.38*pEvidence+.33*structure+.18*edges+.11*dEvidence;
+ // Exclude lookalike lightness/color distributions unless spatial structure matches.
+ if(!(pEvidence>=62&&structure>=52&&edges>=42))score=Math.min(score,59);
+ else if(!(pEvidence>=76&&structure>=68&&edges>=60))score=Math.min(score,82);
+ if(pix>=99.9&&hash>=98&&structure>=98)score=100;
+ return {score:Math.round(clamp100(score)*10)/10,pix,hash,col,structure,edges,dhash};
+}
+function compare(a,b){
+ const full=similarityOne(a.full,b.full),center=similarityOne(a.center,b.center);
+ const winner=center.score*.97>full.score?{...center,score:Math.round(center.score*9.7)/10,area:'中心裁切'}:{...full,area:'全圖'};
+ return winner;
+}
 function progress(n,total,stage){$('progressWrap').classList.remove('hidden');$('progressBar').style.width=(total?100*n/total:0).toFixed(1)+'%';$('progressText').textContent=stage+'：'+n+' / '+total}
 function lock(busy){S.busy=busy;for(const id of ['run','clearFolders','addFolder','addFiles','aiRun'])$(id).disabled=busy;$('stop').disabled=!busy}
 $('stop').onclick=()=>{S.stop=true;message('正在停止，已完成的結果會保留。')};
@@ -77,7 +146,7 @@ $('run').onclick=async()=>{
             for(const b of byGroup[gj]){
               if(S.stop)break outer;
               const m=compare(a,b);
-              if(m.score>=Math.max(45,threshold-15))S.results.push({a,b,...m,analysis:'',source:'',id:count});
+              if(m.score>=Math.max(20,threshold-40))S.results.push({a,b,...m,analysis:'',source:'',id:count});
               count++;
               if(count%1000===0){progress(count,pairTotal,'比對進度');await wait()}
               if(S.results.length>MAX_RESULTS*3){S.results.sort((x,y)=>y.score-x.score);S.results.length=MAX_RESULTS}
@@ -93,7 +162,7 @@ $('run').onclick=async()=>{
   }catch(err){console.error(err);message('執行失敗：'+err.message)}
   finally{lock(false);drawResults()}
 };
-function rule(m){const a=m.score>=98?'極高':m.score>=90?'高':m.score>=80?'中等':'較低';const base=`兩張照片的離線綜合相似度為 ${m.score.toFixed(1)}%，屬於${a}相似。像素 ${m.pix.toFixed(1)}%、感知雜湊 ${m.hash.toFixed(1)}%、色彩特徵 ${m.col.toFixed(1)}%。`;const conclude=m.score>=98?'高度疑似相同畫面或同一影像之轉存／壓縮，請核對原始檔案、拍攝日期與工程施作位置。':m.score>=90?'具有明顯相似視覺特徵，請人工核對施工內容、背景及照片是否重複引用。':m.score>=80?'可能有相同場景或相近視角，需搭配工程數量、估驗資料與現場位置查證。':'僅顯示部分視覺相似，應人工檢視，勿單憑分數判定異常。';return base+' '+conclude}
+function rule(m){const a=m.score>=98?'極高':m.score>=90?'高':m.score>=80?'中等':'較低';const base=`兩張照片經多特徵交叉驗證後的相似度指標為 ${m.score.toFixed(1)}%（非統計機率），屬於${a}相似。pHash ${m.hash.toFixed(1)}%、明暗結構 ${m.structure.toFixed(1)}%、邊緣一致性 ${m.edges.toFixed(1)}%；像素 ${m.pix.toFixed(1)}%、色彩 ${m.col.toFixed(1)}%僅供輔助，不直接推高風險分數。`;const conclude=m.score>=98?'高度疑似相同畫面或同一影像之轉存／壓縮，請核對原始檔案、拍攝日期與工程施作位置。':m.score>=90?'具有明顯相似視覺特徵，請人工核對施工內容、背景及照片是否重複引用。':m.score>=80?'可能有相同場景或相近視角，需搭配工程數量、估驗資料與現場位置查證。':'缺乏足夠的照片結構一致性證據；即使光線、色調或材質相似，也不應視為重複照片。';return base+' '+conclude}
 function visible(){const t=Number($('threshold').value);return S.results.filter(x=>x.score>=t)}
 function drawResults(){const v=visible(), el=$('matches');$('stats').innerHTML='<span class="stat">照片 <b>'+S.items.length+'</b></span><span class="stat">跨群組配對 <b>'+S.allPairs.toLocaleString()+'</b></span><span class="stat">達門檻組數 <b>'+v.length+'</b></span><span class="stat">最高分 <b>'+(S.results.length?S.results[0].score.toFixed(1)+'%':'—')+'</b></span>';el.replaceChildren();if(!v.length){el.innerHTML='<p class="hint">沒有符合目前門檻的組合。您可降低列出門檻後重新檢視（不需重算），或新增不同資料夾重新分析。</p>';$('pageLabel').textContent='';return}S.page=Math.max(0,Math.min(S.page,Math.ceil(v.length/PAGE_SIZE)-1));for(const m of v.slice(S.page*PAGE_SIZE,(S.page+1)*PAGE_SIZE)){const box=document.createElement('article');box.className='match';const imgs=[m.a,m.b];for(const item of imgs){const col=document.createElement('div');col.className='photo';const label=document.createElement('b');label.textContent=item.folder;label.style.fontSize='12px';const im=document.createElement('img');im.src=item.thumb;im.alt=item.file.name;const title=document.createElement('div');title.className='filename';title.textContent=item.file.name;col.append(label,im,title);box.append(col)}const d=document.createElement('div');d.className='detail';const score=document.createElement('div');score.className='score';score.textContent=m.score.toFixed(1)+'%';const sub=document.createElement('div');sub.className='muted';sub.textContent='像素 '+m.pix.toFixed(1)+'% · 雜湊 '+m.hash.toFixed(1)+'% · 色彩 '+m.col.toFixed(1)+'%';const summary=document.createElement('div');summary.className='summary';summary.textContent=m.analysis||rule(m);const btn=document.createElement('button');btn.className='smallbtn';btn.textContent='排除這組';btn.onclick=()=>{S.results=S.results.filter(x=>x!==m);drawResults()};d.append(score,sub,summary,btn);box.append(d);el.append(box)}$('pageLabel').textContent='第 '+(S.page+1)+' / '+Math.ceil(v.length/PAGE_SIZE)+' 頁（共 '+v.length+' 組）'}
 $('prev').onclick=()=>{S.page--;drawResults()};$('next').onclick=()=>{S.page++;drawResults()};
