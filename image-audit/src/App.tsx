@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { getDinoClient } from './dinoClient';
 import type { ModelState } from './dinoClient';
+import { assessPhotoEvidence, buildAuditRule } from './auditEvidence';
 import { getCached, setCached, clearEmbedCache, countCached } from './embedCache';
 
 /* =====================================================================
@@ -188,31 +189,8 @@ const RANGE_CONFIG: RangeConfig[] = [
   { key: 'below-80', label: '80% 以下', min: 0, max: 80, color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200' },
 ];
 
-/** 規則版差異說明（免 API Key） */
-const buildRuleText = (item: MatchItem): string => {
-  const d = item.dino;
-  const p = item.pixel;
-
-  if (d === null) {
-    return `1. 差異度說明：像素相似度 ${p}%（本次未取得 DINOv2 特徵，僅以像素比對）。\n2. 分析結論：建議確認兩張照片的拍攝時間與地點後再判定，或稍後重試以取得特徵比對結果。`;
-  }
-
-  const head = `DINOv2 特徵相似度 ${d}%、像素相似度 ${p}%。`;
-
-  if (d >= 97 && p >= 88) {
-    return `1. 差異度說明：${head}兩張影像在全域特徵與像素分佈上幾乎完全一致，研判為同一張照片，差異僅可能來自重新壓縮或浮水印。\n2. 分析結論：高度風險，極可能為重複使用同一張照片，建議調閱原始檔（含 EXIF 拍攝時間）確認。`;
-  }
-  if (d >= 94 && p >= 70) {
-    return `1. 差異度說明：${head}主體、構圖與場景高度一致，像素差異主要來自裁切、縮放、光線或壓縮失真。\n2. 分析結論：中高度風險，可能為同一張照片裁切或調色後重複使用，建議與施工日誌及拍攝時間比對。`;
-  }
-  if (d >= 90) {
-    return `1. 差異度說明：${head}場景與主要結構相同，但像素分佈差異明顯，研判為同一地點之不同角度或不同時間拍攝。\n2. 分析結論：中低風險，屬同一工地之不同照片，仍須以拍攝時間與施工進度確認是否重複計價。`;
-  }
-  if (d >= 80) {
-    return `1. 差異度說明：${head}構圖或場景部分相似，惟細節特徵差異明顯，應為不同影像。\n2. 分析結論：低風險，研判為不同照片。`;
-  }
-  return `1. 差異度說明：${head}兩張影像在整體特徵上差異明顯。\n2. 分析結論：研判為不同照片，無重複請款疑慮。`;
-};
+/** Rules for audit triage. Do not interpret cosine scores as legal or duplicate probabilities. */
+const buildRuleText = (item: MatchItem): string => buildAuditRule({dino:item.dino,pixel:item.pixel});
 
 const isFatalApiError = (error: ApiError): boolean =>
   [401, 402, 403, 404, 429].includes(error.status ?? -1);
@@ -303,25 +281,46 @@ const App = () => {
     return { unique: unique.size, pairs };
   }, [folders]);
 
-  /* ---------------------- 資料夾操作 ---------------------- */
-
+  /* ---------------------- 資料來源（照片多選不會觸發資料夾上傳確認） ---------------------- */
+  const appendPhotos = (photos: File[], name: string) => {
+    const images = photos.filter(file=>file.type.startsWith('image/')||/\.(jpe?g|png|webp|bmp)$/i.test(file.name));
+    if(!images.length) { notify('沒有可用照片','請選擇包含 JPG、PNG 或 WebP 的資料。','warning'); return; }
+    setFolders(prev=>[...prev,{id:Date.now()+Math.floor(Math.random()*1000),name,files:images}]);
+    notify('照片已加入','已加入「'+name+'」共 '+images.length+' 張；照片在本機瀏覽器進行比對。');
+  };
   const addFolder = (e: ChangeEvent<HTMLInputElement>) => {
-    const picked = e.target.files;
-    if (!picked || picked.length === 0) return;
-
-    const newFiles = Array.from(picked).filter((f) => f.type.startsWith('image/'));
-    if (newFiles.length === 0) {
-      alert('此資料夾內沒有可用的圖片檔（支援 JPG / PNG / WebP 等）。');
-      e.target.value = '';
-      return;
+    const files=Array.from(e.target.files||[]);
+    if(files.length){
+      const rel=(files[0] as File & {webkitRelativePath?:string}).webkitRelativePath;
+      appendPhotos(files,rel?rel.split('/')[0]:('照片批次 '+(folders.length+1)));
     }
-
-    const relativePath = (newFiles[0] as File & { webkitRelativePath?: string }).webkitRelativePath;
-    const folderName = relativePath ? relativePath.split('/')[0] : `資料夾 ${folders.length + 1}`;
-
-    setFolders((prev) => [...prev, { id: Date.now(), name: folderName, files: newFiles }]);
-    notify('照片匯入成功', '已加入「'+folderName+'」\n共 '+newFiles.length+' 張照片，請繼續加入另一組照片。');
-    e.target.value = '';
+    e.target.value='';
+  };
+  const addSelectedFiles = (e: ChangeEvent<HTMLInputElement>) => {
+    const files=Array.from(e.target.files||[]);
+    if(files.length)appendPhotos(files,'照片批次 '+(folders.length+1));
+    e.target.value='';
+  };
+  const chooseDirectory = async () => {
+    // File System Access API: a user-initiated, read-only picker. Browser permission
+    // prompts cannot be suppressed; use ordinary multiple files to avoid folder upload dialog.
+    const picker=(window as unknown as {showDirectoryPicker?:()=>Promise<unknown>}).showDirectoryPicker;
+    if(!picker){document.getElementById('desktopFolderInput')?.click();return;}
+    type DirEntry={kind:string;name:string;getFile?:()=>Promise<File>;values?:()=>AsyncIterable<DirEntry>};
+    try {
+      const root=await picker.call(window) as DirEntry;
+      const photos:File[]=[];
+      const collect=async(dir:DirEntry):Promise<void>=>{
+        for await(const entry of dir.values?.()??[]){
+          if(entry.kind==='file'&&entry.getFile)photos.push(await entry.getFile());
+          else if(entry.kind==='directory')await collect(entry);
+        }
+      };
+      await collect(root);
+      appendPhotos(photos,root.name||('照片批次 '+(folders.length+1)));
+    }catch(e){
+      if((e as Error)?.name!=='AbortError') notify('資料夾讀取未完成','無法讀取資料夾，請改用「選取多張照片」。瀏覽器的存取授權確認無法由網頁取消。','warning');
+    }
   };
 
   const removeFolder = (id: number) => setFolders((prev) => prev.filter((f) => f.id !== id));
@@ -832,7 +831,7 @@ ${scoreInfo}
         reportRows.push({
           score:primaryScore(item),
           label:item.dino!==null?'DINOv2 特徵相似度':'像素相似度',
-          detail:'像素相似度：'+item.pixel.toFixed(2)+'%',
+          detail:'像素相似度：'+item.pixel.toFixed(2)+'%｜查核判讀：'+assessPhotoEvidence(item).heading',
           sourceA:item.sourceA,sourceB:item.sourceB,
           filenameA:item.fileA.name,filenameB:item.fileB.name,
           imageA,imageB,
@@ -1039,26 +1038,27 @@ ${scoreInfo}
                   <Folder className="w-5 h-5 text-blue-600" />
                   資料來源
                 </h3>
-                <div className="relative">
-                  <button className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 flex items-center gap-1">
-                    <Plus className="w-3 h-3" /> 加入
+                <div className="flex flex-wrap justify-end gap-2">
+                  <label className="relative text-xs bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 cursor-pointer">
+                    ＋ 選取多張照片
+                    <input type="file" multiple accept="image/*" onChange={addSelectedFiles}
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"/>
+                  </label>
+                  <button type="button" onClick={()=>{void chooseDirectory();}}
+                    className="text-xs bg-white border border-blue-200 text-blue-700 px-3 py-2 rounded-md hover:bg-blue-50">
+                    ＋ 選擇資料夾
                   </button>
-                  <input
-                    type="file"
-                    multiple
-                    onChange={addFolder}
-                    {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
+                  <input id="desktopFolderInput" type="file" multiple onChange={addFolder}
+                    {...({webkitdirectory:'',directory:''} as Record<string,string>)} className="hidden"/>
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto min-h-[200px] max-h-[300px] space-y-2 pr-2 custom-scrollbar">
                 {folders.length === 0 && (
                   <p className="text-xs text-slate-400 text-center py-8 leading-relaxed">
-                    點「加入」選擇整個資料夾
+                    建議「選取多張照片」以避免瀏覽器的資料夾上傳提示
                     <br />
-                    至少需要 2 個資料夾才能比對
+                    至少加入 2 批照片；選擇資料夾仍可能顯示瀏覽器授權確認
                   </p>
                 )}
                 {folders.map((folder, idx) => (
@@ -1288,6 +1288,7 @@ ${scoreInfo}
                         <div className="w-8 h-[1px] bg-slate-200 my-1" />
                         <div className="text-[10px] text-slate-400">像素</div>
                         <div className="text-sm font-bold text-slate-600">{item.pixel}%</div>
+                        <div className="text-[11px] font-semibold text-amber-800 text-center mt-2 leading-4">{assessPhotoEvidence(item).heading}</div>
                       </div>
 
                       <div className="flex-1 space-y-1 min-w-0">
