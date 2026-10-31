@@ -63,6 +63,9 @@ jobs:
         run: |
           node image-audit/tests/test-docx.cjs
 
+      - name: Test audit triage and safer photo imports
+        run: node image-audit/tests/test-audit-evidence.cjs
+
       - name: Test browser image scoring (false positives and near duplicates)
         run: node image-audit/tests/test-comparator.cjs
 
