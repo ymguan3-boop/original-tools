@@ -24,7 +24,7 @@ const DINO_MODEL_ID = 'Xenova/dinov2-small';
 /** 清單最多保留的組數，避免記憶體爆掉 */
 const MAX_RESULTS = 2000;
 const DESKTOP_FULL_SCAN = true;
-const DESKTOP_VERSION = '2.4.0';
+const DESKTOP_VERSION = '2.5.0';
 /** 清單每頁顯示組數 */
 const PAGE_SIZE = 30;
 
@@ -972,7 +972,7 @@ const App = () => {
       }
       const blob = await writer.create({
         title:'工程照片完整查核報告',
-        engine:'桌面版 v2.4.0；完整分析 '+(scanSummary?.total??0)+' 組跨批次照片，幾何驗證 '+(scanSummary?.checked??0)+' 組，失敗 '+(scanSummary?.errors??0)+' 項，幾何補列 '+(scanSummary?.rescued??0)+' 組；共同視覺門檻 '+listThreshold+'%；DINOv2-small、Patch（可用時）、SHA-256、FAST／BRIEF、RANSAC、對齊 SSIM',
+        engine:'桌面版 v2.5.0；完整分析 '+(scanSummary?.total??0)+' 組跨批次照片，幾何驗證 '+(scanSummary?.checked??0)+' 組，失敗 '+(scanSummary?.errors??0)+' 項，幾何補列 '+(scanSummary?.rescued??0)+' 組；共同視覺門檻 '+listThreshold+'%；DINOv2-small、Patch（可用時）、SHA-256、FAST／BRIEF、SIFT-style 梯度補強、RANSAC、對齊 SSIM（含重疊率與證據圖）',
         rows:reportRows
       });
       const url=URL.createObjectURL(blob),link=document.createElement('a');
@@ -1016,7 +1016,7 @@ const App = () => {
                 工程照片交叉稽核系統 <span className="text-sm text-indigo-700 bg-indigo-50 px-2 rounded-lg">桌面版 v{DESKTOP_VERSION}</span>
               </h1>
               <p className="text-xs text-slate-500 mt-1">
-                開始分析：全部跨批次照片進行共同視覺、DINOv2、FAST／BRIEF、RANSAC、SSIM → 查核報告 DOCX
+                開始分析：全部配對執行去白邊、多區域快速篩選、DINOv2、FAST／BRIEF、SIFT-style 補強、RANSAC、SSIM → DOCX
               </p>
             </div>
             <span className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold">
