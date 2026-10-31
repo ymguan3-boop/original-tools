@@ -22,6 +22,7 @@ export interface AdvancedResult {
   method?:'FAST / BRIEF'|'多尺度 SIFT-style 梯度描述子'|'SHA-256';
   overlap?:number|null;
   siftMatches?:number;
+  matchImage?:string|null;
 }
 type Frame={w:number;h:number;gray:Float32Array;mask:Uint8Array;canvas:HTMLCanvasElement};
 type Point={x:number;y:number;score:number;desc:Uint8Array};
@@ -254,6 +255,21 @@ function registeredSSIM(a:Frame,b:Frame,model:Similarity,includeHeatmap=true){
  if(ctx&&overlay)ctx.putImageData(overlay,0,0);
  return {ssim:Math.round(10000*Math.max(0,totalSSIM/blocks))/100,differenceArea:Math.round(10000*diffCount/pixelCount)/100,overlap:Math.round(pixelCount/Math.min(a.mask.reduce((n,v)=>n+v,0),b.mask.reduce((n,v)=>n+v,0))*1000)/10,heatmap:heat?.toDataURL('image/jpeg',.75)??null};
 }
+/** Visual explanation for reviewers; red/green lines show RANSAC-consistent pairs.
+ * Only generated for reported candidates, never every negative pair. */
+function featurePlot(a:Frame,b:Frame,pairs:Pair[],model:Similarity|null):string|null{
+ if(!model||!pairs.length)return null;
+ const canvas=document.createElement('canvas');canvas.width=WIDTH*2;canvas.height=HEIGHT;
+ const c=canvas.getContext('2d');if(!c||typeof c.beginPath!=='function')return null;
+ c.drawImage(a.canvas,0,0);c.drawImage(b.canvas,WIDTH,0);
+ c.lineWidth=1.2;
+ for(const p of pairs.slice(0,45)){
+  const ok=inlier(model,p);
+  c.strokeStyle=ok?'#2ee985':'#fa7777';
+  c.beginPath();c.moveTo(p.a.x,p.a.y);c.lineTo(WIDTH+p.b.x,p.b.y);c.stroke();
+ }
+ return canvas.toDataURL('image/jpeg',.74);
+}
 /** Per-pair comparison using precomputed FAST/BRIEF and oriented gradient descriptors. */
 export function comparePrepared(aPrepared:PreparedAdvanced,bPrepared:PreparedAdvanced,includeHeatmap=false):AdvancedResult{
  const a=aPrepared.frame,b=bPrepared.frame;
@@ -274,6 +290,7 @@ export function comparePrepared(aPrepared:PreparedAdvanced,bPrepared:PreparedAdv
   return {status,label,method,matches:pairs.length,inliers,inlierRatio:Math.round(1000*ratio)/10,
    coverage:Math.round(10000*coverage)/100,
    alignedSSIM:aligned.ssim,differenceArea:aligned.differenceArea,overlap:aligned.overlap,heatmap:aligned.heatmap,
+   matchImage:includeHeatmap?featurePlot(a,b,pairs,geom.model):null,
    note:status==='verified'?'局部幾何和對齊結構支持疑似同源；仍須核對原圖及工程資料。':
     status==='review'?'部分特徵一致，但尚不能確認同源。':
     '特徵點不足、裁切或拍攝角度可能降低匹配；無法據此判定照片不同。'};
