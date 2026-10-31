@@ -5,7 +5,16 @@ const VERSION='1.0';
 const DEFAULT_CHECKS=['核對 A、B 原始影像、EXIF、檔案雜湊及拍攝日期／時間。','核對施工位置、工項、工程日誌、估驗計價、契約與驗收紀錄。','如有跨批次照片重用疑點，確認是否為同一拍攝來源及是否具有合理使用原因。'];
 const text=(x,max=260)=>String(x==null?'':x).replace(/[\u0000-\u001f\u007f]+/g,' ').replace(/<[^>]*>/g,'').trim().slice(0,max);
 const number=x=>x!==null&&x!==undefined&&Number.isFinite(Number(x))?Math.max(0,Math.min(100,Number(x))).toFixed(1)+'%':'未取得';
-const array=(v,max=3)=>(Array.isArray(v)?v:[]).filter(x=>typeof x==='string').map(x=>text(x,190)).filter(Boolean).slice(0,max);
+const safeAI=(raw,max=190)=>{
+ let v=text(raw,max);
+ // Visual models are not authoritative sources for numeric metrics or legal findings.
+ if(/(?:pHash|dHash|DINOv2|SSIM|\d+(?:\.\d+)?\s*%)/i.test(v))
+   v=v.replace(/\d+(?:\.\d+)?\s*%/g,'〔AI 數值未採用〕').replace(/(?:pHash|dHash|DINOv2|SSIM)/gi,'〔指標以系統數值為準〕');
+ if(/(?:確定|證實|已經|必然|絕對|肯定|已確認).{0,12}(?:違規|違法|重複請款|詐欺|造假|不同照片|同一張照片)/.test(v))
+   return 'AI 回答含尚未核實的確定性判斷，已排除；需人工查證原始檔案及工程紀錄。';
+ return v;
+};
+const array=(v,max=3)=>(Array.isArray(v)?v:[]).filter(x=>typeof x==='string').map(x=>safeAI(x)).filter(Boolean).slice(0,max);
 function prompt(){
  return [
  '你是工程照片雙圖的中立觀察員，僅能描述提供的 A、B 兩張影像中可看見的內容。',
@@ -35,7 +44,7 @@ function parseAI(raw){
  try{data=JSON.parse(s.slice(a,b+1));}catch{throw Error('AI JSON 無法解析');}
  if(!data||typeof data!=='object'||Array.isArray(data))throw Error('AI 格式不符合報告欄位');
  if(!Array.isArray(data.similarities)||!Array.isArray(data.differences)||!Array.isArray(data.checks)||typeof data.assessment!=='string')throw Error('AI 缺少必要欄位');
- const obs={same:array(data.similarities),different:array(data.differences),assessment:text(data.assessment,260),checks:array(data.checks)};
+ const obs={same:array(data.similarities),different:array(data.differences),assessment:safeAI(data.assessment,260),checks:array(data.checks)};
  if(!obs.same.length&&!obs.different.length)throw Error('AI 未提供可核對的照片觀察');
  return obs;
 }
