@@ -52,8 +52,7 @@ async function normalizedJpeg(dataUrl) {
  ctx.drawImage(img,Math.round((W-w)/2),Math.round((H-h)/2),w,h);
  return dataBytes(canvas.toDataURL('image/jpeg',0.85));
 }
-function drawing(rel,id,name) {
- const W=2664000,H=1665000;
+function drawing(rel,id,name,W=2664000,H=1665000) {
  return '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="20"/></w:pPr><w:r><w:drawing>'+
  '<wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0">'+
  '<wp:extent cx="'+W+'" cy="'+H+'"/><wp:docPr id="'+id+'" name="'+xml(name)+'"/>'+
@@ -80,7 +79,15 @@ function groupDoc(row,i) {
  s+=T('#'+(i+1)+' 稽核群組','<w:b/><w:sz w:val="28"/><w:color w:val="24486B"/>');
  s+=T((row.label||'綜合相似度')+'：'+Number(row.score).toFixed(1)+'%','<w:b/><w:sz w:val="24"/><w:color w:val="C12B43"/>');
  if(row.detail)s+=T(row.detail,'<w:color w:val="64748B"/><w:sz w:val="18"/>');
- s+=photoTable(row,['rId'+(i*2+1),'rId'+(i*2+2)],i);
+ s+=photoTable(row,['rId'+(i*4+1),'rId'+(i*4+2)],i);
+ if(row.featureImage){
+  s+=T('【特徵點幾何對應圖】綠線表示幾何一致的局部匹配，紅線表示其他候選匹配；仍須人工核對。','<w:b/><w:color w:val="24486B"/>');
+  s+=drawing('rId'+(i*4+3),i*4+3,'特徵點匹配圖',5800000,2175000);
+ }
+ if(row.evidenceImage){
+  s+=T('【幾何對齊後差異熱區】紅色顯示有效重疊區域的差異，不能直接認定照片造假。','<w:b/><w:color w:val="24486B"/>');
+  s+=drawing('rId'+(i*4+4),i*4+4,'差異熱區',5400000,3375000);
+ }
  s+=T('【查核結果】'+(row.analysisSource?'（'+row.analysisSource+'）':'') ,'<w:b/><w:color w:val="24486B"/>');
  for(const line of String(row.analysis||'（尚未產生差異說明；請人工確認照片與工程資料）').split(/\r?\n/))s+=T(line,'<w:sz w:val="20"/>');
  return s;
@@ -93,8 +100,15 @@ async function create(input) {
   const row=rows[i],A=await normalizedJpeg(row.imageA),B=await normalizedJpeg(row.imageB);
   const left='photo'+String(i+1).padStart(4,'0')+'-A.jpeg',right='photo'+String(i+1).padStart(4,'0')+'-B.jpeg';
   files.push(['word/media/'+left,A],['word/media/'+right,B]);
-  rels.push('<Relationship Id="rId'+(i*2+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/'+left+'"/>');
-  rels.push('<Relationship Id="rId'+(i*2+2)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/'+right+'"/>');
+  rels.push('<Relationship Id="rId'+(i*4+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/'+left+'"/>');
+  rels.push('<Relationship Id="rId'+(i*4+2)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/'+right+'"/>');
+  for(const [kind,key,offset] of [['feature','featureImage',3],['heatmap','evidenceImage',4]]){
+   if(row[key]){
+    const file='photo'+String(i+1).padStart(4,'0')+'-'+kind+'.jpeg';
+    files.push(['word/media/'+file,await normalizedJpeg(row[key])]);
+    rels.push('<Relationship Id="rId'+(i*4+offset)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/'+file+'"/>');
+   }
+  }
   body+=groupDoc(row,i);
  }
  const title=input.title||'工程照片交叉稽核報告';
@@ -102,7 +116,9 @@ async function create(input) {
  const prefix=T(title,'<w:b/><w:sz w:val="36"/><w:color w:val="182A42"/>')+
  T('產製日期：'+date+'　｜　稽核組數：'+rows.length,'<w:color w:val="475569"/>')+
  T('分析引擎：'+(input.engine||'瀏覽器本機影像比對'),'<w:color w:val="475569"/>')+
- T('本報告之相似度為查核線索，非違規機率；請核對工程日誌、拍攝日期、契約及驗收資料。','<w:color w:val="64748B"/>');
+ T('本報告之相似度為查核線索，非違規機率；請核對工程日誌、拍攝日期、契約及驗收資料。','<w:color w:val="64748B"/>')+
+ T('【查核摘要】入選 '+rows.length+' 組｜幾何高度疑似 '+rows.filter(r=>r.geometryStatus==='verified').length+' 組｜跨門檻補列 '+rows.filter(r=>r.geometryRescued).length+' 組｜原檔完全相同 '+rows.filter(r=>r.geometryStatus==='byte-identical').length+' 組','<w:b/><w:color w:val="24486B"/>')+
+ T('【判讀說明】快速分數與影像同源證據是不同指標，低分並不代表不同照片。下列證據圖只標示幾何對應與差異，請審計人員查核原始檔及施工紀錄。','<w:color w:val="64748B"/>');
  const doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
  '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>'+prefix+body+
  '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="900" w:right="1000" w:bottom="900" w:left="1000" w:header="500" w:footer="500"/></w:sectPr></w:body></w:document>';
