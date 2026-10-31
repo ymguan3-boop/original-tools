@@ -743,7 +743,7 @@ const App = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const callOpenRouter = async (prompt: string, item: MatchItem): Promise<string> => {
+  const callOpenRouter = async (prompt: string, item: MatchItem): Promise<{content:string; model:string}> => {
     const [imageA, imageB] = await Promise.all([
       fileToJpegDataUrl(item.fileA, SEND_MAX_SIDE),
       fileToJpegDataUrl(item.fileB, SEND_MAX_SIDE),
@@ -806,7 +806,7 @@ const App = () => {
       if (res.ok) {
         const message = data?.choices?.[0]?.message;
         const content=reportAPI().extractContent(data);
-        if(content.trim())return content.trim();
+        if(content.trim())return {content:content.trim(),model:typeof data?.model==='string'?data.model:model};
         throw new Error('模型未回傳內容（可能達到 token 上限或觸發安全過濾），請重試或換一個模型。');
       }
 
@@ -865,9 +865,9 @@ const App = () => {
       const prompt = reportAPI().prompt();
 
       try {
-        const raw = await callOpenRouter(prompt, item);
-        // Malformed or partial visual-model responses are never silently labeled as AI conclusions.
-        const text = reportAPI().formatAI(raw,reportContext(item,model));
+        const response = await callOpenRouter(prompt, item);
+        // Only the observed AI text is accepted; model identity comes from the actual API response.
+        const text = reportAPI().formatAI(response.content,reportContext(item,response.model));
         setResults((prev) =>
           prev.map((r) => (r.id === item.id ? { ...r, analysis: text, analysisSource: 'ai' } : r))
         );
