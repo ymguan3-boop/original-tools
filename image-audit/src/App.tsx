@@ -956,14 +956,9 @@ ${scoreInfo}
                 一次分析（像素＋DINOv2 特徵，免金鑰）→ 差異說明 → Word 查核報告
               </p>
             </div>
-            <a
-              href="./image-audit-desktop-html-offline.zip"
-              download="image-audit-desktop-html-offline.zip"
-              className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold"
-              title="下載可直接雙擊 HTML 的免安裝離線版，採像素與感知雜湊初篩（非 DINOv2）"
-            >
-              <FileCheck className="w-3.5 h-3.5" /> 下載桌面 HTML 離線版（ZIP）
-            </a>
+            <span className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold">
+              <FileCheck className="w-3.5 h-3.5" /> 桌面 DINOv2 本機模型
+            </span>
             <a
               href="https://github.com/ymguan3-boop/original-tools"
               target="_blank"
