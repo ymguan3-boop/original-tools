@@ -48,6 +48,14 @@ jobs:
         working-directory: image-audit
         run: npm run build -- --base=./
 
+      - name: Test browser image scoring (false positives and near duplicates)
+        run: node image-audit/tests/test-comparator.cjs
+
+      - name: Test Windows desktop HTTP route handling
+        env:
+          GO111MODULE: "off"
+        run: go test ./image-audit/desktop -v
+
       - name: Build Windows DINOv2 portable launcher
         run: |
           mkdir -p image-audit/desktop-build
