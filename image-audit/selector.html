@@ -19,28 +19,63 @@ ul{padding-left:21px;line-height:1.9;color:#52627b;font-size:14px;flex:1}
 .btn:hover{filter:brightness(.94)}.card:nth-child(2) .btn{background:#0c8164}
 .notice{margin-top:28px;border:1px solid #d8e0ef;background:#fff;border-radius:12px;padding:16px 18px;font-size:13px;line-height:1.8;color:#576b80}
 footer{padding-top:26px;color:#76879e;font-size:12px}
+
+.guide-link{display:block;text-align:center;margin-top:13px;color:#245ed2;font-size:13px;font-weight:700;text-underline-offset:3px}
+.guide{margin-top:36px;background:linear-gradient(155deg,#fff,#f8fbff);border:1px solid #d9e3f0;border-radius:22px;padding:30px;box-shadow:0 6px 22px #21395e0b;scroll-margin-top:22px}
+.guide-head{display:flex;gap:13px;align-items:center;margin-bottom:8px}.guide-head .symbol{width:48px;height:48px;flex-shrink:0}
+.guide h2{margin:0;font-size:23px}.guide .intro{font-size:14px;margin:6px 0 20px}
+.steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;counter-reset:instruction}
+.step{position:relative;background:#fff;border:1px solid #e0e7f2;border-radius:15px;padding:20px 19px 18px;min-height:155px}
+.step::before{counter-increment:instruction;content:counter(instruction);position:absolute;right:16px;top:15px;width:30px;height:30px;border-radius:10px;background:#eaf1ff;color:#285cbd;display:grid;place-items:center;font-size:14px;font-weight:800}
+.step h3{font-size:16px;color:#172d4a;margin:0 37px 8px 0}.step p{font-size:13px;line-height:1.8;margin:0}
+.guide code,.notice code{background:#edf2f9;border-radius:5px;padding:2px 5px;font-family:Consolas,monospace;overflow-wrap:anywhere}
+.guide-note{margin-top:18px;padding:14px 17px;background:#edf5ff;border:1px solid #d4e4fb;color:#365475;border-radius:12px;font-size:13px;line-height:1.8}
+.guide h3.subhead{font-size:17px;margin:26px 0 11px;color:#173553}
+.faq{border-top:1px solid #e3e9f2}.faq details{border-bottom:1px solid #e3e9f2;padding:14px 3px}
+.faq summary{cursor:pointer;font-weight:700;font-size:14px;color:#24446b;line-height:1.6}
+.faq details p{font-size:13px;margin:9px 0 2px;line-height:1.85}
+@media(max-width:680px){.guide{padding:21px 16px}.steps{grid-template-columns:1fr}.step{min-height:0}}
 @media(max-width:680px){.grid{grid-template-columns:1fr}.wrap{padding:24px 15px 60px}.card{padding:23px}}
 </style></head>
 <body><main class="wrap">
 <a class="back" href="../">← 返回原創工具集</a>
 <h1>工程照片 AI 交叉稽核系統</h1>
-<p class="sub">請選擇適合您的使用方式。兩版都能交叉比對工程照片、產生差異說明及匯出 Word；採用不同的影像分析引擎。</p>
+<p class="sub">請選擇適合您的使用方式。兩版都能交叉比對工程照片、產生差異說明及匯出 DOCX；採用不同的影像分析引擎。</p>
 <div class="grid">
 <section class="card">
 <div class="symbol" aria-hidden="true">⬇</div><h2>下載桌面版</h2>
 <span class="tag">DINOv2 語意相似度 · 本機推論</span>
-<small>適合需要進一步辨識裁切、重新壓縮、調色等相似照片的審計工作。</small>
-<ul><li>Windows ZIP，內含 DINOv2 模型與執行檔。</li><li>解壓後雙擊「啟動工程照片稽核.exe」，自動開啟瀏覽器。</li><li>免安裝 Python / Node.js；影像推論不需網路。</li><li>需保留啟動程式視窗，並留意 Windows 未簽章程式提示。</li></ul>
-<a class="btn" download="image-audit-desktop-dinov2.zip" href="./image-audit-desktop-dinov2.zip">下載 DINOv2 桌面版 ZIP</a>
+<small>適合需要進一步辨識裁切、重新壓縮、調色等相似照片的審計工作。下載前可先閱讀下方的安裝及操作說明。</small>
+<ul><li>Windows ZIP，內含 DINOv2 模型與執行檔。</li><li>解壓後雙擊「啟動工程照片稽核.exe」，自動開啟瀏覽器。</li><li>免安裝 Python / Node.js；影像推論不需網路。</li><li>需保留啟動程式視窗，並留意 Windows 未簽章程式提示。</li><li><strong>ZIP 中的 index.html 是介面核心檔案，請勿刪除。</strong></li></ul>
+<a class="btn" download="image-audit-desktop-dinov2.zip" href="./image-audit-desktop-dinov2.zip">下載 DINOv2 桌面版 ZIP</a><a class="guide-link" href="#desktop-guide">查看完整安裝與操作說明 ↓</a>
 </section>
 <section class="card">
 <div class="symbol" aria-hidden="true">🌐</div><h2>使用線上版</h2>
 <span class="tag">像素＋感知雜湊 · 不使用 DINOv2</span>
 <small>適合不想安裝程式、希望立即進行照片相似度初篩的使用者。</small>
-<ul><li>透過瀏覽器開啟，不需下載或安裝。</li><li>以像素、感知雜湊及色彩特徵進行快速初篩。</li><li>支援多資料夾交叉比對、差異說明、Word / CSV 匯出。</li><li>照片在瀏覽器處理；可選擇使用需連網的 AI 文字解說。</li></ul>
+<ul><li>透過瀏覽器開啟，不需下載或安裝。</li><li>以像素、感知雜湊及色彩特徵進行快速初篩。</li><li>支援多資料夾交叉比對、差異說明、DOCX / CSV 匯出。</li><li>照片在瀏覽器處理；可選擇使用需連網的 AI 文字解說。</li></ul>
 <a class="btn" href="./">開啟線上版</a>
 </section>
 </div>
+<section class="guide" id="desktop-guide" aria-labelledby="desktop-guide-title">
+<div class="guide-head"><div class="symbol" aria-hidden="true">📘</div><div><h2 id="desktop-guide-title">Windows 桌面版｜安裝與操作說明</h2><small>免額外安裝 Python、Node.js 或本機伺服器｜適用 Windows 10 / 11</small></div></div>
+<p class="intro">下載後只需完整解壓縮、雙擊 EXE，系統就會在電腦的預設瀏覽器自動開啟。請依照以下步驟操作。</p>
+<div class="steps">
+ <article class="step"><h3>下載並完整解壓縮</h3><p>點選上方「下載 DINOv2 桌面版 ZIP」，在檔案總管對 ZIP 按右鍵，選擇「解壓縮全部」。<strong>不要直接在 ZIP 內執行 EXE</strong>，也不要將 EXE 單獨移出資料夾。</p></article>
+ <article class="step"><h3>雙擊啟動程式</h3><p>開啟解壓縮後的資料夾，雙擊 <code>啟動工程照片稽核.exe</code>。程式會啟動本機服務，並自動開啟預設瀏覽器（建議 Chrome 或 Edge）。</p></article>
+ <article class="step"><h3>匯入照片並分析</h3><p>在網頁介面加入<strong>至少兩個</strong>工程照片資料夾，按「開始分析」，檢視 DINOv2 相似度、雙圖對照與差異說明。進行人工篩選後可匯出 <code>.docx</code> 查核報告。</p></article>
+ <article class="step"><h3>使用完畢再關閉</h3><p>使用期間<strong>請保持 EXE 啟動後的命令視窗開啟</strong>；關閉視窗就會停止本機網頁服務。要再次使用時，只需重新雙擊 EXE。</p></article>
+</div>
+<div class="guide-note"><strong>檔案保留提醒：</strong> ZIP 中的 <code>index.html</code> 是瀏覽器介面本體，不是多餘檔案。<code>assets/</code>、<code>models/</code>、<code>docxWriter.js</code> 等亦為程式資源。請保留解壓縮後的完整資料夾；操作說明已集中在本網頁，ZIP 不必再附獨立的 TXT 說明檔。</div>
+<h3 class="subhead">常見問題與資訊安全提醒</h3>
+<div class="faq">
+ <details><summary>為什麼雙擊 EXE 後會開啟瀏覽器？可以刪掉 HTML 嗎？</summary><p>EXE 只負責在自己的電腦啟動本機 HTTP 服務（<code>127.0.0.1</code> 隨機連接埠）；真正的操作畫面由 <code>index.html</code> 和其他資源提供。因此 HTML 必須保留，不能單獨刪除。</p></details>
+ <details><summary>需要連網或安裝其他軟體嗎？</summary><p>基本 DINOv2 圖像推論使用 ZIP 內的 ONNX 模型和 WebAssembly，無須安裝 Python / Node.js，也無須連網。若自行啟用 OpenRouter AI 文字解說，才需要網路與 API 金鑰；啟用時縮圖可能傳送至第三方服務，應先確認機關資安政策。</p></details>
+ <details><summary>Windows 顯示「保護您的電腦」或未簽章警告怎麼辦？</summary><p>本工具的 EXE 由 GitHub Actions 編譯，未提供商業程式碼簽章。請先確認下載網址是本專案官方頁面，必要時交由資訊單位檢查，確認可信後再依機關規定執行；不要為了使用工具而關閉系統的安全防護。</p></details>
+ <details><summary>為什麼打不開網頁或找不到模型？</summary><p>請先確認 ZIP 已完整解壓縮，並檢查 <code>index.html</code>、<code>assets/</code>、<code>models/</code> 均與 EXE 位於同一資料夾。如果瀏覽器未自動開啟，可使用 EXE 視窗顯示的 <code>http://127.0.0.1:連接埠/</code> 網址，貼到 Chrome 或 Edge。</p></details>
+ <details><summary>相似度高是否代表施工照片重複請款？</summary><p>不是。相似度只表示視覺特徵接近，不能直接推論違規或重複請款。仍應比對照片時間、施工日誌、工項數量、契約及驗收資料。</p></details>
+</div>
+</section>
 <div class="notice"><strong>注意：</strong>真正包含 DINOv2 的桌面版不能可靠地直接雙擊 <code>file://</code> HTML 啟動模型，因此採用「雙擊 EXE → 啟動僅供本機存取的網頁」方式。兩版分數採用不同演算法，不宜直接比較；任何相似結果都應人工查核。</div>
 <footer>創作人 官毅明 · original-tools · <a href="https://github.com/ymguan3-boop/original-tools">GitHub 原始碼</a></footer>
 </main></body></html>
