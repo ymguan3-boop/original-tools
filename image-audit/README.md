@@ -3,11 +3,13 @@
 **版本分流（2026-10-31）：**
 
 - **[選擇使用版本](https://ymguan3-boop.github.io/original-tools/image-audit/selector.html)**：先選擇 DINOv2 桌面 ZIP 或線上輕量版。
-- **[Windows DINOv2 桌面 ZIP](https://ymguan3-boop.github.io/original-tools/image-audit/image-audit-desktop-dinov2.zip)**：本機 DINOv2-small、量化 ONNX 與 WASM 已包進 ZIP。解壓後雙擊 `啟動工程照片稽核.exe`，由內建的 Windows 本機執行程式開啟瀏覽器，**無須安裝 Python**。依瀏覽器安全限制，DINOv2 版無法保證直接雙擊 `file://` HTML 運作。
+- **[Windows DINOv2 桌面 ZIP](https://ymguan3-boop.github.io/original-tools/image-audit/image-audit-desktop-dinov2.zip)**：本機 DINOv2-small、量化 ONNX 與 WASM 已包進 ZIP。解壓後雙擊 `啟動工程照片稽核.exe`，由 Windows 本機啟動器開啟瀏覽器，**無須安裝 Python**。完整安裝步驟已放在[版本選擇與下載頁](https://ymguan3-boop.github.io/original-tools/image-audit/selector.html#desktop-guide)，桌面 ZIP 不再附安裝說明 TXT。依瀏覽器安全限制，DINOv2 版無法保證直接雙擊 `file://` HTML 運作。
 - **[線上輕量版](https://ymguan3-boop.github.io/original-tools/image-audit/)**：免下載、免 DINOv2，使用像素、感知雜湊與色彩特徵組合進行照片相似度初篩，支援 Word／CSV 匯出。
 - **[舊版直接雙擊 HTML ZIP](https://ymguan3-boop.github.io/original-tools/image-audit/image-audit-desktop-html-offline.zip)**：保留為相容下載，不包含 DINOv2，適合只能開啟 HTML 的環境。
 
 > 兩種演算法不可直接混用分數，照片相似度僅能作查核線索，仍須核對日期、工程日誌、契約及驗收資料。原下方 DINOv2 功能與技術說明屬「Windows DINOv2 桌面版」，並非現行線上輕量版。
+
+> **桌面版打包說明（2026-10-31）**：ZIP 必須保留 `index.html`、`assets/`、`models/` 與 `docxWriter.js` 等程式資源。EXE 僅負責啟動 `127.0.0.1` 本機伺服器，並讀取 `index.html` 提供操作介面。**不可單獨刪除 HTML 或只取出 EXE 執行**；ZIP 中原獨立的 `使用說明.txt` 則已移至下載頁，故不再打包。
 
 ## 操作流程（3 步）
 
