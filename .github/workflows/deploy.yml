@@ -107,6 +107,7 @@ jobs:
           cp -r mobile-remote-assist/* deploy/mobile-remote-assist/
           # image-audit built assets (base: /original-tools/image-audit/)
           cp -r image-audit/dist/* deploy/image-audit/
+          cp image-audit/shared/docx-export.js deploy/image-audit/docx-export.js
           # DINOv2 is desktop-only. Online edition uses pixel and perceptual hashing.
           cp image-audit/online/index.html deploy/image-audit/index.html
           cp image-audit/selector.html deploy/image-audit/selector.html
@@ -124,6 +125,7 @@ jobs:
               for file in sorted(source.iterdir()):
                   if file.is_file():
                       archive.write(file, arcname=file.name)
+          archive.write('image-audit/shared/docx-export.js', arcname='docx-export.js')
               archive.write('image-audit/shared/docxWriter.js', arcname='docxWriter.js')
           assert output.stat().st_size > 1024, 'Desktop ZIP is empty'
           print('Offline HTML ZIP ready:', output, output.stat().st_size, 'bytes')
