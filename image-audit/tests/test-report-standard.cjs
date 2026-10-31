@@ -23,6 +23,18 @@ for(const output of [ai,rule]){
  assert.ok(output.includes('核對施工位置'),'Mandatory verification missing');
  assert.ok(!output.includes('已確定違規'),'Unsafe legal conclusion');
 }
+const recovered=api.formatRule({
+ score:54.4,edition:'desktop',
+ advanced:{status:'verified',label:'高度疑似同一影像來源',
+ matches:29,inliers:23,inlierRatio:79.3,coverage:70.9,alignedSSIM:91.4,
+ differenceArea:1.7,note:'幾何對應與結構一致'}
+});
+assert.ok(recovered.includes('FAST／BRIEF'), 'Forensic method not documented');
+assert.ok(recovered.includes('23 個內點'), 'RANSAC result not shown');
+assert.ok(recovered.includes('91.4%'), 'SSIM not shown');
+assert.ok(recovered.includes('高度疑似')&&recovered.includes('即使共同視覺分數較低'),
+ 'Low shared score must not override strong geometry');
+assert.ok(!recovered.includes('現有證據不足以確認同源'), 'Contradictory low-score conclusion');
 assert.ok(ai.includes('OpenRouter 視覺模型')&&ai.includes('test/vision-model'));
 assert.ok(ai.includes('兩圖都可見同一形狀'),'AI observation missing');
 assert.ok(rule.includes('規則模式未使用視覺語言模型'),'Rules-only report must not imply image understanding');
