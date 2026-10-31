@@ -125,7 +125,7 @@ jobs:
               for file in sorted(source.iterdir()):
                   if file.is_file():
                       archive.write(file, arcname=file.name)
-          archive.write('image-audit/shared/docx-export.js', arcname='docx-export.js')
+              archive.write('image-audit/shared/docx-export.js', arcname='docx-export.js')
               archive.write('image-audit/shared/docxWriter.js', arcname='docxWriter.js')
           assert output.stat().st_size > 1024, 'Desktop ZIP is empty'
           print('Offline HTML ZIP ready:', output, output.stat().st_size, 'bytes')
