@@ -313,7 +313,7 @@ $('word').onclick=async()=>{
   // Both Windows DINOv2 and this HTML edition use the very same DOCX layout engine.
   const blob=await window.ImageAuditDocx.create({
    title:'工程照片完整查核報告',
-   engine:'共同視覺引擎 v2.3.0（原始照片直接採樣；門檻 '+$('threshold').value+'%；pHash／dHash／結構／邊緣／位置校正）',
+   engine:'共同視覺引擎 v2.3.0（原圖取樣；門檻 '+$('threshold').value+'%；資料夾 '+S.groups.length+'；已載入照片 '+S.items.length+'；跨組配對 '+S.allPairs+'；pHash／dHash／結構／邊緣／位置校正）',
    rows:reportRows
   });
   const url=URL.createObjectURL(blob),a=document.createElement('a');
