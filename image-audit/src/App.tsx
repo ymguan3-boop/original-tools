@@ -58,8 +58,12 @@ interface ImageFolder {
   files: File[];
 }
 
+interface VisualMetrics { score:number; pix:number; hash:number; structure:number; edges:number; registered:number; col:number; strongEvidence:boolean; }
+interface VisualComparator { sample:(bitmap:ImageBitmap,crop?:boolean)=>unknown; compare:(a:{full:unknown;center:unknown},b:{full:unknown;center:unknown})=>VisualMetrics; rule:(metrics:VisualMetrics)=>string; }
 interface MatchItem {
   id: string;
+  score: number;
+  visual:VisualMetrics;
   /** DINOv2 特徵相似度 0~100（主要分數；模型不可用時為 null） */
   dino: number | null;
   /** 像素相似度 0~100（輔助參考） */
@@ -99,7 +103,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** 主要分數：有 DINOv2 就用它，否則退回像素相似度 */
-const primaryScore = (item: MatchItem): number => item.dino ?? item.pixel;
+const primaryScore = (item: MatchItem): number => item.score;
 
 /** 餘弦相似度（Worker 回傳的向量已正規化，因此等同內積） */
 const cosineOf = (a: Float32Array, b: Float32Array): number => {
@@ -190,7 +194,12 @@ const RANGE_CONFIG: RangeConfig[] = [
 ];
 
 /** Rules for audit triage. Do not interpret cosine scores as legal or duplicate probabilities. */
-const buildRuleText = (item: MatchItem): string => buildAuditRule({dino:item.dino,pixel:item.pixel});
+const buildRuleText = (item: MatchItem): string => {
+  const shared=(window as unknown as {ImageAuditComparator?:VisualComparator}).ImageAuditComparator;
+  const common=shared?.rule(item.visual) || '照片需人工核對原始檔案及拍攝情形。';
+  return common+'\n4. DINOv2 輔助：'+(item.dino===null?'未取得特徵向量':'特徵餘弦相似度 '+item.dino.toFixed(1)+'%')+
+  '；64×64 中心區像素相似度 '+item.pixel.toFixed(2)+'%。DINOv2 不參與跨版本共同篩選分數，不得將語意相似度直接解讀為同一張照片的機率。';
+};
 
 const isFatalApiError = (error: ApiError): boolean =>
   [401, 402, 403, 404, 429].includes(error.status ?? -1);
@@ -212,7 +221,7 @@ const App = () => {
 
   /* ---------- 資料 ---------- */
   const [folders, setFolders] = useState<ImageFolder[]>([]);
-  const [listThreshold, setListThreshold] = useState(80);
+  const [listThreshold, setListThreshold] = useState(85);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState({ stage: '', done: 0, total: 0 });
 
@@ -281,46 +290,67 @@ const App = () => {
     return { unique: unique.size, pairs };
   }, [folders]);
 
-  /* ---------------------- 資料來源（照片多選不會觸發資料夾上傳確認） ---------------------- */
-  const appendPhotos = (photos: File[], name: string) => {
-    const images = photos.filter(file=>file.type.startsWith('image/')||/\.(jpe?g|png|webp|bmp)$/i.test(file.name));
-    if(!images.length) { notify('沒有可用照片','請選擇包含 JPG、PNG 或 WebP 的資料。','warning'); return; }
-    setFolders(prev=>[...prev,{id:Date.now()+Math.floor(Math.random()*1000),name,files:images}]);
-    notify('照片已加入','已加入「'+name+'」共 '+images.length+' 張；照片在本機瀏覽器進行比對。');
+  const isImage=(file:File)=>file.type.startsWith('image/')||/\.(jpe?g|png|webp|bmp)$/i.test(file.name);
+  const appendGroups=(groups:Array<{name:string;files:File[]}>)=>{
+    const valid=groups.map(g=>({...g,files:g.files.filter(isImage)})).filter(g=>g.files.length);
+    if(!valid.length){notify('沒有可用照片','請選取含有 JPG、PNG 或 WebP 的資料夾。','warning');return}
+    const seed=Date.now()*1000;
+    setFolders(prev=>[...prev,...valid.map((g,i)=>({id:seed+i,name:g.name,files:g.files}))]);
+    notify('資料夾匯入成功','已加入 '+valid.length+' 個照片群組，共 '+valid.reduce((n,g)=>n+g.files.length,0)+' 張照片。');
   };
-  const addFolder = (e: ChangeEvent<HTMLInputElement>) => {
+  const addFolder=(e:ChangeEvent<HTMLInputElement>)=>{
     const files=Array.from(e.target.files||[]);
     if(files.length){
-      const rel=(files[0] as File & {webkitRelativePath?:string}).webkitRelativePath;
-      appendPhotos(files,rel?rel.split('/')[0]:('照片批次 '+(folders.length+1)));
+      const path=(files[0] as File & {webkitRelativePath?:string}).webkitRelativePath;
+      appendGroups([{name:path?.split('/')[0]||('照片批次 '+(folders.length+1)),files}]);
     }
     e.target.value='';
   };
-  const addSelectedFiles = (e: ChangeEvent<HTMLInputElement>) => {
+  const addSelectedFiles=(e:ChangeEvent<HTMLInputElement>)=>{
     const files=Array.from(e.target.files||[]);
-    if(files.length)appendPhotos(files,'照片批次 '+(folders.length+1));
+    if(files.length)appendGroups([{name:'照片批次 '+(folders.length+1),files}]);
     e.target.value='';
   };
-  const chooseDirectory = async () => {
-    // File System Access API: a user-initiated, read-only picker. Browser permission
-    // prompts cannot be suppressed; use ordinary multiple files to avoid folder upload dialog.
-    const picker=(window as unknown as {showDirectoryPicker?:()=>Promise<unknown>}).showDirectoryPicker;
-    if(!picker){document.getElementById('desktopFolderInput')?.click();return;}
-    type DirEntry={kind:string;name:string;getFile?:()=>Promise<File>;values?:()=>AsyncIterable<DirEntry>};
-    try {
-      const root=await picker.call(window) as DirEntry;
-      const photos:File[]=[];
-      const collect=async(dir:DirEntry):Promise<void>=>{
-        for await(const entry of dir.values?.()??[]){
-          if(entry.kind==='file'&&entry.getFile)photos.push(await entry.getFile());
-          else if(entry.kind==='directory')await collect(entry);
-        }
-      };
-      await collect(root);
-      appendPhotos(photos,root.name||('照片批次 '+(folders.length+1)));
-    }catch(e){
-      if((e as Error)?.name!=='AbortError') notify('資料夾讀取未完成','無法讀取資料夾，請改用「選取多張照片」。瀏覽器的存取授權確認無法由網頁取消。','warning');
+  const addManyFolderFallback=(e:ChangeEvent<HTMLInputElement>)=>{
+    const files=Array.from(e.target.files||[]),groups=new Map<string,File[]>();
+    for(const f of files){
+      if(!isImage(f))continue;
+      const parts=(f as File & {webkitRelativePath?:string}).webkitRelativePath?.split('/')||[f.name];
+      const name=parts.length>=3?parts[1]:parts[0]+'（根目錄）';
+      if(!groups.has(name))groups.set(name,[]);
+      groups.get(name)?.push(f);
     }
+    if(groups.size<2)notify('請選擇共同父資料夾','此功能會把父資料夾內的各個第一層子資料夾，分別建立為獨立照片群組。若照片在不同磁碟位置，請重複加入單一資料夾。','warning');
+    else appendGroups([...groups].map(([name,files])=>({name,files})));
+    e.target.value='';
+  };
+  type FolderHandle={kind:string;name:string;getFile?:()=>Promise<File>;values?:()=>AsyncIterable<FolderHandle>};
+  const getFolderPicker=()=> (window as unknown as {showDirectoryPicker?: (opts?:{mode:'read'})=>Promise<FolderHandle>}).showDirectoryPicker;
+  const collectFolder=async(root:FolderHandle,files:File[]):Promise<void>=>{
+    for await(const child of root.values?.()??[]){
+      if(child.kind==='file'&&child.getFile){const f=await child.getFile();if(isImage(f))files.push(f)}
+      else if(child.kind==='directory')await collectFolder(child,files);
+    }
+  };
+  const chooseDirectory=async()=>{
+    const picker=getFolderPicker();
+    if(!picker){document.getElementById('desktopFolderInput')?.click();return}
+    try{const root=await picker({mode:'read'}),files:File[]=[];await collectFolder(root,files);appendGroups([{name:root.name,files}]);}
+    catch(e){if((e as Error)?.name!=='AbortError')notify('資料夾讀取失敗','可改用「選取多張照片」，瀏覽器的安全權限提示無法由程式強制取消。','warning')}
+  };
+  const chooseManyDirectories=async()=>{
+    const picker=getFolderPicker();
+    if(!picker){document.getElementById('desktopManyFolderInput')?.click();return}
+    try{
+      const root=await picker({mode:'read'}),groups:Array<{name:string;files:File[]}>=[],rootFiles:File[]=[];
+      for await(const child of root.values?.()??[]){
+        if(child.kind==='file'&&child.getFile){const file=await child.getFile();if(isImage(file))rootFiles.push(file)}
+        else if(child.kind==='directory'){const files:File[]=[];await collectFolder(child,files);if(files.length)groups.push({name:child.name,files})}
+      }
+      if(rootFiles.length)groups.unshift({name:root.name+'（根目錄）',files:rootFiles});
+      if(groups.length<2)notify('沒有多個子資料夾','請選擇至少包含兩個照片子資料夾的共同父資料夾；無法一次原生選取不同路徑的資料夾。','warning');
+      else appendGroups(groups);
+    }catch(e){if((e as Error)?.name!=='AbortError')notify('批次匯入失敗','請改選共同父資料夾，或逐一加入單個資料夾。','warning')}
   };
 
   const removeFolder = (id: number) => setFolders((prev) => prev.filter((f) => f.id !== id));
@@ -449,6 +479,18 @@ const App = () => {
         await sleep(0);
       }
 
+      /* Shared browser comparator: same image samples and formula as the online edition. */
+      const common=(window as unknown as {ImageAuditComparator?:VisualComparator}).ImageAuditComparator;
+      if(!common)throw new Error('共用視覺比對引擎 comparator-core.js 未載入');
+      const visualFeatures:Array<{full:unknown;center:unknown}|null>=new Array(files.length).fill(null);
+      for(let i=0;i<files.length;i++){
+        if(stopRef.current)return;
+        const bitmap=await createImageBitmap(files[i]);
+        try{visualFeatures[i]={full:common.sample(bitmap),center:common.sample(bitmap,true)}}
+        finally{bitmap.close()}
+        if(i%12===0){setProgress({stage:'建立跨版本共同視覺特徵',done:i+1,total:files.length});await sleep(0)}
+      }
+
       /* 4) 交叉比對（向量內積，瞬間完成） */
       setProgress({ stage: '交叉比對中…', done: files.length, total: files.length });
 
@@ -483,11 +525,16 @@ const App = () => {
 
               const dino = ea && eb ? Math.round(cosineOf(ea, eb) * 1000) / 10 : null;
               const pixel = sigA && sigB ? Math.round(pixelSimilarity(sigA, sigB) * 100) / 100 : 0;
-              const score = dino ?? pixel;
-              if (score < listThreshold) continue;
+              const va=visualFeatures[fa],vb=visualFeatures[fb];
+              if(!va||!vb)continue;
+              const visual=common.compare(va,vb);
+              const score=visual.score;
+              if(score<listThreshold)continue;
 
               matches.push({
                 id: `${folderIds[a]}-${folderIds[b]}-${fa}-${fb}`,
+                score,
+                visual,
                 dino,
                 pixel,
                 fileA: files[fa],
@@ -771,8 +818,8 @@ const App = () => {
 
       const scoreInfo =
         item.dino !== null
-          ? `前一步 DINOv2 特徵相似度為 ${item.dino}%、像素相似度為 ${item.pixel}%（僅供參考，仍請以實際看到的內容為準）。`
-          : `像素相似度為 ${item.pixel}%（未取得 DINOv2 特徵），僅供參考，仍請以實際看到的內容為準。`;
+          ? `跨版本共同視覺相似度為 ${item.score}%；另 DINOv2 輔助特徵為 ${item.dino}%、64×64 像素為 ${item.pixel}%（均不是違規機率）。`
+          : `共用視覺相似度為 ${item.score}%，64×64 像素相似度為 ${item.pixel}%（未取得 DINOv2 特徵），僅供參考，仍請以實際看到的內容為準。`;
 
       const prompt = `你是專業工程稽核員。第一張圖為 A 組（${item.sourceA}），第二張圖為 B 組（${item.sourceB}）。
 ${scoreInfo}
@@ -830,8 +877,8 @@ ${scoreInfo}
         ]);
         reportRows.push({
           score:primaryScore(item),
-          label:item.dino!==null?'DINOv2 特徵相似度':'像素相似度',
-          detail:'像素相似度：'+item.pixel.toFixed(2)+'%｜查核判讀：'+assessPhotoEvidence(item).heading,
+          label:'跨版本共用視覺相似度',
+          detail:'DINOv2 特徵餘弦：'+(item.dino===null?'未取得':item.dino.toFixed(1)+'%')+'｜pHash '+item.visual.hash.toFixed(1)+'%｜位置校正 '+item.visual.registered.toFixed(1)+'%｜64×64 像素 '+item.pixel.toFixed(2)+'%',
           sourceA:item.sourceA,sourceB:item.sourceB,
           filenameA:item.fileA.name,filenameB:item.fileB.name,
           imageA,imageB,
@@ -841,7 +888,7 @@ ${scoreInfo}
       }
       const blob = await writer.create({
         title:'工程照片完整查核報告',
-        engine:ordered.some(r=>r.dino!==null)?'DINOv2-small（本機推論）':'像素比對（模型未載入）',
+        engine:'共用視覺比對 V2.2（跨版本同一篩選分數）＋ DINOv2-small 輔助特徵',
         rows:reportRows
       });
       const url=URL.createObjectURL(blob),link=document.createElement('a');
@@ -1039,26 +1086,22 @@ ${scoreInfo}
                   資料來源
                 </h3>
                 <div className="flex flex-wrap justify-end gap-2">
-                  <label className="relative text-xs bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 cursor-pointer">
-                    ＋ 選取多張照片
-                    <input type="file" multiple accept="image/*" onChange={addSelectedFiles}
-                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"/>
+                  <button type="button" onClick={()=>{void chooseDirectory();}} className="text-xs bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700">＋ 單一資料夾</button>
+                  <button type="button" onClick={()=>{void chooseManyDirectories();}} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-md hover:bg-blue-100">＋ 多個資料夾</button>
+                  <label className="relative text-xs border border-slate-200 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50">＋ 多張照片
+                    <input type="file" multiple accept="image/*" onChange={addSelectedFiles} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"/>
                   </label>
-                  <button type="button" onClick={()=>{void chooseDirectory();}}
-                    className="text-xs bg-white border border-blue-200 text-blue-700 px-3 py-2 rounded-md hover:bg-blue-50">
-                    ＋ 選擇資料夾
-                  </button>
-                  <input id="desktopFolderInput" type="file" multiple onChange={addFolder}
-                    {...({webkitdirectory:'',directory:''} as Record<string,string>)} className="hidden"/>
+                  <input id="desktopFolderInput" type="file" multiple onChange={addFolder} {...({webkitdirectory:'',directory:''} as Record<string,string>)} className="hidden"/>
+                  <input id="desktopManyFolderInput" type="file" multiple onChange={addManyFolderFallback} {...({webkitdirectory:'',directory:''} as Record<string,string>)} className="hidden"/>
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto min-h-[200px] max-h-[300px] space-y-2 pr-2 custom-scrollbar">
                 {folders.length === 0 && (
                   <p className="text-xs text-slate-400 text-center py-8 leading-relaxed">
-                    建議「選取多張照片」以避免瀏覽器的資料夾上傳提示
+                    可單獨加入資料夾，或選擇共同父資料夾一次加入多個子資料夾
                     <br />
-                    至少加入 2 批照片；選擇資料夾仍可能顯示瀏覽器授權確認
+                    至少 2 個照片群組；不同路徑的資料夾可逐一加入
                   </p>
                 )}
                 {folders.map((folder, idx) => (
@@ -1093,13 +1136,13 @@ ${scoreInfo}
                   </div>
                   <input
                     type="range"
-                    min="60"
-                    max="99"
+                    min="50"
+                    max="100"
                     value={listThreshold}
                     onChange={(e) => setListThreshold(Number(e.target.value))}
                     className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">分析時套用；變更後需重新分析才會生效（分布圖也會同步隱藏低於此值的分區）</p>
+                  <p className="text-[10px] text-slate-400 mt-1">篩選使用與網頁版完全相同的共用視覺分數；DINOv2 另列為輔助證據。更改後請重新分析。</p>
                 </div>
 
                 <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded p-2 leading-relaxed">
@@ -1277,7 +1320,7 @@ ${scoreInfo}
                       </div>
 
                       <div className="flex flex-col items-center justify-center w-20 shrink-0">
-                        <div className="text-[10px] text-indigo-400">DINOv2</div>
+                        <div className="text-[10px] text-blue-600 font-bold text-center">共用視覺相似度</div><div className="text-lg font-black text-blue-700">{item.score.toFixed(1)}%</div><div className="text-[10px] text-indigo-400 mt-1">DINOv2 輔助</div>
                         {item.dino !== null ? (
                           <div className={`text-lg font-black ${item.dino >= 95 ? 'text-red-600' : 'text-indigo-600'}`}>
                             {item.dino}%
@@ -1288,7 +1331,7 @@ ${scoreInfo}
                         <div className="w-8 h-[1px] bg-slate-200 my-1" />
                         <div className="text-[10px] text-slate-400">像素</div>
                         <div className="text-sm font-bold text-slate-600">{item.pixel}%</div>
-                        <div className="text-[11px] font-semibold text-amber-800 text-center mt-2 leading-4">{assessPhotoEvidence(item).heading}</div>
+                        <div className="text-[11px] font-semibold text-amber-800 text-center mt-2 leading-4">{item.visual.strongEvidence?"優先核對同源": "待人工查證"}</div>
                       </div>
 
                       <div className="flex-1 space-y-1 min-w-0">
@@ -1376,7 +1419,7 @@ ${scoreInfo}
                 <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b">分析報告</h4>
                 <div className="flex gap-4 mb-4">
                   <div className="bg-indigo-50 p-3 rounded-lg flex-1 text-center">
-                    <div className="text-xs font-bold text-indigo-800">DINOv2</div>
+                    <div className="text-xs font-bold text-indigo-800">DINOv2（輔助）</div>
                     <div className="text-2xl font-black text-indigo-600">{selectedResult.dino ?? 'N/A'}%</div>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg flex-1 text-center">
@@ -1384,6 +1427,7 @@ ${scoreInfo}
                     <div className="text-2xl font-bold text-slate-500">{selectedResult.pixel}%</div>
                   </div>
                 </div>
+                <div className="mb-3 rounded-lg bg-blue-50 p-3 text-center"><div className="text-xs text-blue-700">跨版本共用視覺相似度（主要篩選）</div><div className="font-black text-2xl text-blue-800">{selectedResult.score.toFixed(1)}%</div></div>
                 <div className="text-xs text-slate-500 space-y-1 mb-3">
                   <div>A：{selectedResult.sourceA} / {selectedResult.fileA.name}</div>
                   <div>B：{selectedResult.sourceB} / {selectedResult.fileB.name}</div>
