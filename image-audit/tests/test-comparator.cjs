@@ -55,7 +55,8 @@ for(const file of [path.join(ROOT,'online/index.html'),path.join(ROOT,'offline/å
  const flatUnrelated=f.similarityOne(flat,other);
  console.log(path.relative(ROOT,file),{identical:identical.score,near:near.score,unrelated:unrelated.score,flatUnrelated:flatUnrelated.score});
  assert.ok(identical.score>=99.9,'exact duplicate should be 100');
- assert.ok(near.score>=88,'near-identical images with small brightness/noise changes must score high');\n assert.ok(near.score>unrelated.score+25,'near-duplicates must be distinguishable');
+ assert.ok(near.score>=88,'near-identical images with small brightness/noise changes must score high');
+ assert.ok(near.score>unrelated.score+25,'near-duplicates must be distinguishable');
  assert.ok(unrelated.score<78,'different image structures must not be misclassified at 78%');
  assert.ok(flatUnrelated.score<78,'flat images with different brightness must not be falsely flagged');
  assert.ok(Number.isFinite(near.score)&&Number.isFinite(unrelated.score));
