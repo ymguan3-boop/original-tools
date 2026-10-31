@@ -66,6 +66,20 @@ jobs:
           cp -r mobile-remote-assist/* deploy/mobile-remote-assist/
           # image-audit built assets (base: /original-tools/image-audit/)
           cp -r image-audit/dist/* deploy/image-audit/
+          # Build a self-contained ZIP from static offline HTML (no Python needed by users).
+          # Python is used only on the GitHub Actions runner to create the UTF-8 ZIP.
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          source = Path('image-audit/offline')
+          output = Path('deploy/image-audit/image-audit-desktop-html-offline.zip')
+          with ZipFile(output, 'w', compression=ZIP_DEFLATED, compresslevel=9) as archive:
+              for file in sorted(source.iterdir()):
+                  if file.is_file():
+                      archive.write(file, arcname=file.name)
+          assert output.stat().st_size > 1024, 'Desktop ZIP is empty'
+          print('Offline HTML ZIP ready:', output, output.stat().st_size, 'bytes')
+          PY
           cp deploy/image-audit/index.html deploy/image-audit/404.html || true
           # ensure .nojekyll is at deploy root and subdirs for Pages
           touch deploy/.nojekyll
