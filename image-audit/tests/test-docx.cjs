@@ -59,5 +59,27 @@ function readZip(blob){
  assert.ok(react.includes('ImageAuditDocx')&&react.includes('setDialog')&&react.includes('role="alertdialog"'),'Desktop DOCX or centered modal not integrated');
 const selector=fs.readFileSync(path.join(root,'selector.html'),'utf8');
 assert.ok(selector.includes('id="desktop-guide"')&&selector.includes('啟動工程照片稽核.exe')&&selector.includes('index.html'),'Desktop installation instructions must be on the download page');
+ // Both online and desktop now use docxWriter.js; verify its actual OOXML output.
+ const sharedWriter=fs.readFileSync(path.join(root,'shared/docxWriter.js'),'utf8');
+ const sharedSandbox={...sandbox};sharedSandbox.window=sharedSandbox;
+ vm.runInNewContext(sharedWriter,sharedSandbox,{timeout:3000});
+ assert.equal(typeof sharedSandbox.ImageAuditDocx.create,'function','Unified DOCX writer is missing');
+ const reportRows=[
+  {score:72,sourceA:'第一批次',sourceB:'第二批次',filenameA:'照片A.png',filenameB:'照片B.png',
+    imageA:tinyImage,imageB:tinyImage,analysis:'【一、照片可見相同點】\n待核對\n【二、照片可見差異】\n無法確定\n【三、客觀比對證據】\n分數72%',
+    analysisSource:'本機規則模板'},
+  {score:95,sourceA:'第一批次',sourceB:'第三批次',filenameA:'施工A.png',filenameB:'施工B.png',
+    imageA:tinyImage,imageB:tinyImage,analysis:'【四、查核研判】\n建議優先查核\n【五、待查證事項】\n原始影像\n【六、來源與判讀限制】\nOpenRouter 視覺模型',
+    analysisSource:'OpenRouter AI'}
+ ];
+ const standardized=await sharedSandbox.ImageAuditDocx.create({rows:reportRows,title:'工程照片完整查核報告',engine:'共同視覺初篩'});
+ const parts=await readZip(standardized);
+ assert.ok(parts['word/document.xml'],'Shared writer produced no DOCX document');
+ const doc=new TextDecoder().decode(parts['word/document.xml']);
+ assert.ok(doc.indexOf('95.0%')<doc.indexOf('72.0%'),'Shared writer did not sort by descending score');
+ assert.ok(doc.includes('【一、照片可見相同點】')&&doc.includes('【六、來源與判讀限制】'),'Unified narrative sections absent');
+ assert.ok(doc.includes('OpenRouter AI')&&doc.includes('本機規則模板'),'Provenance metadata lost');
+ assert.equal(Object.keys(parts).filter(p=>p.startsWith('word/media/')).length,4,'Expected two equal-size comparison photos per group');
+ assert.equal((doc.match(/<wp:extent cx="2664000" cy="1665000"/g)||[]).length,4,'Word images need matching fixed bounded dimensions');
  console.log('DOCX ZIP structure, pair order, uniform photo frames, descriptions and both app integrations: PASS');
 })().catch(e=>{console.error(e);process.exitCode=1});
