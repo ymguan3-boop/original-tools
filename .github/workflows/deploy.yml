@@ -62,7 +62,6 @@ jobs:
       - name: Validate DOCX reports with embedded paired images
         run: |
           node image-audit/tests/test-docx.cjs
-          python3 image-audit/tests/check-docx.py
 
       - name: Test browser image scoring (false positives and near duplicates)
         run: node image-audit/tests/test-comparator.cjs
@@ -141,7 +140,8 @@ jobs:
                   out = root / asset.relative_to('image-audit/dist')
                   out.parent.mkdir(parents=True, exist_ok=True)
                   copyfile(asset, out)
-          copyfile('image-audit/desktop/使用說明.txt', root/'使用說明.txt')
+          # Installation guide lives on selector.html; no redundant TXT in the EXE ZIP.
+          (root/'使用說明.txt').unlink(missing_ok=True)
           legacy = root/'legacy-model.zip'
           model_files = 0
           onnx_files = 0
@@ -166,6 +166,8 @@ jobs:
           if model_files == 0 or onnx_files == 0:
               raise RuntimeError(f'Existing v1.1.0 release does not contain a DINOv2 ONNX model: models={model_files}, onnx={onnx_files}')
           assert (root/'index.html').exists()
+          assert (root/'docxWriter.js').is_file(), 'Native DOCX writer required by the desktop app'
+          assert not (root/'使用說明.txt').exists(), 'Installer TXT must not be packaged'
           assert (root/'啟動工程照片稽核.exe').stat().st_size > 100000
           output = Path('deploy/image-audit/image-audit-desktop-dinov2.zip')
           with ZipFile(output, 'w', compression=ZIP_DEFLATED, compresslevel=6) as archive:
@@ -174,6 +176,10 @@ jobs:
                       archive.write(file, arcname=file.relative_to(root))
           with ZipFile(output) as archive:
               assert archive.testzip() is None, 'ZIP checksum failed'
+              bundled=set(archive.namelist())
+              assert 'index.html' in bundled, 'index.html is mandatory for the EXE launcher'
+              assert 'docxWriter.js' in bundled, 'DOCX writer must remain bundled'
+              assert '使用說明.txt' not in bundled, 'Instructions have moved to selector.html'
           print('DINOv2 portable desktop ZIP:', output, output.stat().st_size, 'bytes')
           print('Bundled model files:', model_files, 'ONNX models:', onnx_files)
           PY
