@@ -26,27 +26,24 @@ function image(mode){
    return [v,v,v];
  });
 }
-function loadComparator(file){
- const html=fs.readFileSync(file,'utf8');
- const start=html.indexOf('const DCT_COS=');
- const end=html.indexOf('function progress(n,total,stage)',start);
- assert.ok(start>0&&end>start, 'multi-evidence function missing: '+file);
- const script=html.slice(start,end);
- const mock={
-  console, Uint8Array,Uint8ClampedArray,Float32Array,Float64Array,Array,Math,
-  document:{createElement(){
-   let current=null;
-   return {set width(n){},set height(n){},getContext(){return {
-    fillRect(){},drawImage(img){current=img;},
-    getImageData(){return {data:current.pixels}}
-   }}};
-  }}
- };
- const f=vm.runInNewContext(script+'\n({sample,similarityOne,compare,registeredStructure})',mock);
- return f;
+function loadComparator(){
+  const source=fs.readFileSync(path.join(ROOT,'shared/comparator-core.js'),'utf8');
+  const mock={
+   console,Uint8Array,Uint8ClampedArray,Float32Array,Float64Array,Array,Math,
+   document:{createElement(){
+    let current=null;
+    return {set width(n){},set height(n){},getContext(){return {
+     fillRect(){},drawImage(img){current=img;},
+     getImageData(){return {data:current.pixels}}
+    }}};
+   }}
+  };
+  mock.window=mock;
+  vm.runInNewContext(source,mock);
+  return mock.ImageAuditComparator;
 }
 for(const file of [path.join(ROOT,'online/index.html'),path.join(ROOT,'offline/工程照片交叉稽核系統.html')]){
- const f=loadComparator(file);
+ const f=loadComparator();
  const sample=(name)=>f.sample(image(name));
  const a=sample('A'),noisy=sample('A-noisy'),b=sample('B'),flat=sample('flat'),other=sample('flat-other');
  const identical=f.similarityOne(a,a);
@@ -68,3 +65,18 @@ for(const file of [path.join(ROOT,'online/index.html'),path.join(ROOT,'offline/�
  assert.ok(flatUnrelated.score<78,'flat images with different brightness must not be falsely flagged');
  assert.ok(Number.isFinite(near.score)&&Number.isFinite(unrelated.score));
 }
+
+const canonical=fs.readFileSync(path.join(ROOT,'shared/comparator-core.js'),'utf8');
+const publicCopy=fs.readFileSync(path.join(ROOT,'public/comparator-core.js'),'utf8');
+assert.equal(publicCopy,canonical,'desktop web distribution must share identical scoring code');
+for(const file of ['online/index.html','offline/工程照片交叉稽核系統.html']){
+ const html=fs.readFileSync(path.join(ROOT,file),'utf8');
+ assert.ok(html.includes('<script src="./comparator-core.js"></script>'),'missing shared comparator reference in '+file);
+ assert.ok(html.includes('const {sample,compare,rule}=window.ImageAuditComparator'),'not invoking shared scorer in '+file);
+ assert.ok(!html.includes('const DCT_COS='),'obsolete independent scorer found in '+file);
+}
+const app=fs.readFileSync(path.join(ROOT,'src/App.tsx'),'utf8');
+assert.ok(app.includes('const visual=common.compare(va,vb)'),'desktop must use same common score');
+assert.ok(app.includes('const score=visual.score'),'desktop threshold must use visual score');
+assert.ok(app.includes('const primaryScore = (item: MatchItem): number => item.score'),'sorting must be unified');
+console.log('PASS: shared visual engine and use in both editions');
