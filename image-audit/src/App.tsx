@@ -46,7 +46,7 @@ const TOPN_STORAGE = 'image-audit:top-n';
 
 /** 送給 OpenRouter 的縮圖長邊 */
 const SEND_MAX_SIDE = 1024;
-/** 匯出 Word 時內嵌圖片的長邊（避免報告檔過大） */
+/** 匯出 DOCX 時內嵌圖片的長邊（避免報告檔過大） */
 const REPORT_MAX_SIDE = 1280;
 
 /* ------------------------------- 型別 ------------------------------- */
@@ -243,6 +243,10 @@ const App = () => {
   const [selectedResult, setSelectedResult] = useState<MatchItem | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [notice, setNotice] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<{title:string;message:string;type:'success'|'warning'} | null>(null);
+  const notify = (title:string,message:string,type:'success'|'warning'='success') =>
+    setDialog({title,message,type});
+
 
   /* ---------- 說明／匯出 ---------- */
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
@@ -316,6 +320,7 @@ const App = () => {
     const folderName = relativePath ? relativePath.split('/')[0] : `資料夾 ${folders.length + 1}`;
 
     setFolders((prev) => [...prev, { id: Date.now(), name: folderName, files: newFiles }]);
+    notify('照片匯入成功', '已加入「'+folderName+'」\n共 '+newFiles.length+' 張照片，請繼續加入另一組照片。');
     e.target.value = '';
   };
 
@@ -518,15 +523,12 @@ const App = () => {
       setResults(capped);
       setProgress({ stage: '完成', done: files.length, total: files.length });
 
-      setTimeout(() => {
-        alert(
-          `分析完成！\n` +
-            `照片 ${files.length} 張（比對 ${workload.pairs.toLocaleString()} 組）\n` +
-            (reused > 0 ? `其中 ${reused} 張與其他檔案完全相同，已直接沿用分析結果\n` : '') +
-            (cachedHitCount > 0 ? `其中 ${cachedHitCount} 張從快取載入，未重新推論\n` : '') +
-            `符合門檻 ${matches.length} 組${matches.length > MAX_RESULTS ? `（清單保留前 ${MAX_RESULTS} 組）` : ''}`
-        );
-      }, 100);
+      notify('照片交叉比對完成',
+          '本次照片 '+files.length+' 張、跨資料夾配對 '+workload.pairs.toLocaleString()+' 組\n'+
+          (reused?'已重用 '+reused+' 張相同照片的分析結果\n':'')+
+          (cachedHitCount?'已讀取 '+cachedHitCount+' 張快取特徵\n':'')+
+          '符合門檻 '+matches.length+' 組'+(matches.length>MAX_RESULTS?'（列示前 '+MAX_RESULTS+' 組）':''));
+
     } catch (error) {
       if ((error as Error).message === '已停止') {
         setNotice('已停止分析。');
@@ -807,122 +809,52 @@ ${scoreInfo}
 
     setAnalyzingIds(new Set());
     if (aborted) return;
-    alert(
-      `差異說明與結論生成完成！\n` +
-        `AI 撰寫 ${aiDone} 組、規則判定 ${ruleDone} 組` +
-        (failed > 0 ? `、失敗 ${failed} 組` : '') +
-        '。'
-    );
+    notify('差異說明已完成', 'AI 撰寫 '+aiDone+' 組、規則判定 '+ruleDone+' 組'+(failed ? '、失敗 '+failed+' 組' : '')+'。');
   };
 
-  /* ---------------------- 匯出 Word ---------------------- */
-
+  /* ---------------------- 匯出真正的 DOCX (OOXML) ---------------------- */
   const exportToWord = async () => {
-    if (results.length === 0) return alert('無資料可匯出。');
-
-    const incomplete = results.filter((r) => !r.analysis).length;
-    if (incomplete > 0) {
-      const ok = window.confirm(
-        `尚有 ${incomplete} 筆項目未生成差異說明。\n這些項目在報告中將無文字分析。確定要繼續匯出嗎？`
-      );
-      if (!ok) return;
-    }
+    if (!results.length) { notify('沒有可匯出的照片', '請先完成跨資料夾照片比對。', 'warning'); return; }
+    const ordered = [...results].sort((a,b)=>primaryScore(b)-primaryScore(a));
+    const pending = ordered.filter((r)=>!r.analysis).length;
+    if (pending > 0 && !window.confirm('尚有 ' + pending + ' 組未產生說明。將使用規則判定補齊，是否繼續？')) return;
 
     setIsExporting(true);
     try {
-      const title = '工程照片完整查核報告';
-      const engine =
-        modelState === 'ready' && results.some((r) => r.dino !== null)
-          ? apiKey.trim()
-            ? `DINOv2-small（本機）＋ OpenRouter ${model}`
-            : 'DINOv2-small（本機）＋ 規則判定'
-          : apiKey.trim()
-          ? `像素比對 ＋ OpenRouter ${model}`
-          : '像素比對 ＋ 規則判定';
-
-      let html = `
-        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-        <head>
-          <meta charset="utf-8">
-          <title>${title}</title>
-          <style>
-            @page { size: 21cm 29.7cm; margin: 1.5cm; }
-            body { font-family: 'Microsoft JhengHei', sans-serif; font-size: 10pt; }
-            h1 { font-size: 16pt; margin-bottom: 5px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-            td, th { border: 1px solid #aaa; padding: 4px; vertical-align: top; }
-            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-            .score-box { font-size: 12pt; font-weight: bold; color: #d32f2f; }
-            .img-container { width: 50%; text-align: center; padding: 5px; }
-            img { width: 6.5cm; height: auto; border: 1px solid #eee; display: block; margin: 0 auto; }
-            .group-container { page-break-inside: avoid; margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; }
-            .ai-section { background-color: #f8fafc; padding: 8px; border-top: 1px solid #ddd; margin-top: 5px; }
-            .ai-title { font-weight: bold; color: #1e40af; margin-bottom: 4px; display: block; }
-            .meta { font-size: 8pt; color: #666; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>${title}</h1>
-            <p>列印日期：${new Date().toLocaleDateString()} ｜ 稽核組數：${results.length}</p>
-            <p class="meta">分析引擎：${engine}</p>
-          </div>`;
-
-      for (let i = 0; i < results.length; i++) {
-        const item = results[i];
-        const [imgA, imgB] = await Promise.all([
-          fileToJpegDataUrl(item.fileA, REPORT_MAX_SIDE, 0.8),
-          fileToJpegDataUrl(item.fileB, REPORT_MAX_SIDE, 0.8),
+      const writer = (window as Window & {ImageAuditDocx?: {create: (arg: unknown)=>Promise<Blob>}}).ImageAuditDocx;
+      if(!writer) throw Error('DOCX 產生器尚未載入，請重新下載最新完整桌面 ZIP。');
+      const reportRows = [];
+      for(const item of ordered){
+        const [imageA,imageB] = await Promise.all([
+          fileToJpegDataUrl(item.fileA, REPORT_MAX_SIDE, 0.83),
+          fileToJpegDataUrl(item.fileB, REPORT_MAX_SIDE, 0.83),
         ]);
-        const displayScore = primaryScore(item);
-        const scoreLabel = item.dino !== null ? 'DINOv2 特徵相似度' : '像素相似度';
-        const sourceLabel =
-          item.analysisSource === 'ai' ? '（AI 撰寫）' : item.analysisSource === 'rule' ? '（規則判定）' : '';
-
-        html += `
-          <div class="group-container">
-            <table style="border: none; margin-bottom: 5px;">
-              <tr style="border: none;">
-                <td style="border: none; width: 55%;"><h3 style="margin:0;">#${i + 1} 稽核群組</h3></td>
-                <td style="border: none; text-align: right;">
-                  <span class="score-box">${scoreLabel}：${displayScore}%</span><br/>
-                  <span class="meta">像素相似度：${item.pixel}%</span>
-                </td>
-              </tr>
-            </table>
-
-            <table>
-              <tr>
-                <th style="width: 50%;">A：${item.sourceA}（${item.fileA.name}）</th>
-                <th style="width: 50%;">B：${item.sourceB}（${item.fileB.name}）</th>
-              </tr>
-              <tr>
-                <td class="img-container"><img src="${imgA}" /></td>
-                <td class="img-container"><img src="${imgB}" /></td>
-              </tr>
-            </table>
-
-            <div class="ai-section">
-              <span class="ai-title">【查核結果】${sourceLabel}</span>
-              ${item.analysis ? item.analysis.replace(/\n/g, '<br/>') : '<i>（無差異說明文字）</i>'}
-            </div>
-          </div>`;
+        reportRows.push({
+          score:primaryScore(item),
+          label:item.dino!==null?'DINOv2 特徵相似度':'像素相似度',
+          detail:'像素相似度：'+item.pixel.toFixed(2)+'%',
+          sourceA:item.sourceA,sourceB:item.sourceB,
+          filenameA:item.fileA.name,filenameB:item.fileB.name,
+          imageA,imageB,
+          analysis:item.analysis||buildRuleText(item),
+          analysisSource:item.analysisSource==='ai'?'AI 分析':'規則判定'
+        });
       }
-
-      html += `</body></html>`;
-
-      const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${title}_${new Date().toISOString().slice(0, 10)}.doc`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const blob = await writer.create({
+        title:'工程照片完整查核報告',
+        engine:ordered.some(r=>r.dino!==null)?'DINOv2-small（本機推論）':'像素比對（模型未載入）',
+        rows:reportRows
+      });
+      const url=URL.createObjectURL(blob),link=document.createElement('a');
+      link.href=url;
+      link.download='工程照片完整查核報告_'+new Date().toISOString().slice(0,10)+'.docx';
+      document.body.appendChild(link);link.click();link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),30000);
+      notify('DOCX 報告匯出成功',
+        '共 '+ordered.length+' 組，已依相似度由高至低排序。\n雙圖皆在固定欄寬中等比例縮放，並附完整分析說明。');
     } catch (e) {
       console.error(e);
-      alert('匯出失敗：' + (e as Error).message);
+      notify('DOCX 匯出失敗',String((e as Error)?.message??e),'warning');
     } finally {
       setIsExporting(false);
     }
@@ -1402,6 +1334,20 @@ ${scoreInfo}
         </div>
       </div>
 
+      {/* 置中操作通知：取代原生 alert，避免跳至視窗上方 */}
+      {dialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-5 bg-slate-900/50 backdrop-blur-sm" role="presentation" onMouseDown={(e)=>{if(e.target===e.currentTarget)setDialog(null);}}>
+          <div role="alertdialog" aria-modal="true" aria-labelledby="audit-dialog-title" aria-describedby="audit-dialog-message"
+            className="w-full max-w-md rounded-2xl bg-white p-7 text-center shadow-2xl border border-slate-200">
+            <div className={'mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-5 '+(dialog.type==='warning'?'bg-amber-50 text-amber-600':'bg-emerald-50 text-emerald-600')}>
+              {dialog.type==='warning' ? <AlertTriangle className="w-9 h-9" /> : <CheckCircle className="w-9 h-9" />}
+            </div>
+            <h2 id="audit-dialog-title" className="text-xl font-black text-slate-800 mb-3">{dialog.title}</h2>
+            <p id="audit-dialog-message" className="text-sm text-slate-600 whitespace-pre-line leading-7 mb-6">{dialog.message}</p>
+            <button autoFocus onClick={()=>setDialog(null)} className="rounded-xl bg-blue-700 px-10 py-3 text-white font-semibold hover:bg-blue-800">確定</button>
+          </div>
+        </div>
+      )}
       {/* 詳細檢視 Modal */}
       {selectedResult && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
