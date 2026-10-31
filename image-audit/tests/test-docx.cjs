@@ -70,7 +70,8 @@ assert.ok(selector.includes('id="desktop-guide"')&&selector.includes('啟動工�
     analysisSource:'本機規則模板'},
   {score:95,sourceA:'第一批次',sourceB:'第三批次',filenameA:'施工A.png',filenameB:'施工B.png',
     imageA:tinyImage,imageB:tinyImage,analysis:'【四、查核研判】\n建議優先查核\n【五、待查證事項】\n原始影像\n【六、來源與判讀限制】\nOpenRouter 視覺模型',
-    analysisSource:'OpenRouter AI'}
+    analysisSource:'OpenRouter AI',geometryStatus:'verified',geometryRescued:true,
+    featureImage:tinyImage,evidenceImage:tinyImage}
  ];
  const standardized=await sharedSandbox.ImageAuditDocx.create({rows:reportRows,title:'工程照片完整查核報告',engine:'共同視覺初篩'});
  const parts=await readZip(standardized);
@@ -79,7 +80,9 @@ assert.ok(selector.includes('id="desktop-guide"')&&selector.includes('啟動工�
  assert.ok(doc.indexOf('95.0%')<doc.indexOf('72.0%'),'Shared writer did not sort by descending score');
  assert.ok(doc.includes('【一、照片可見相同點】')&&doc.includes('【六、來源與判讀限制】'),'Unified narrative sections absent');
  assert.ok(doc.includes('OpenRouter AI')&&doc.includes('本機規則模板'),'Provenance metadata lost');
- assert.equal(Object.keys(parts).filter(p=>p.startsWith('word/media/')).length,4,'Expected two equal-size comparison photos per group');
+ assert.equal(Object.keys(parts).filter(p=>p.startsWith('word/media/')).length,6,'Two comparison photos per group plus optional geometric evidence must be bundled');
+ assert.ok(doc.includes('【特徵點幾何對應圖】')&&doc.includes('【幾何對齊後差異熱區】'),'Diagnostic image captions absent');
+ assert.ok(doc.includes('幾何高度疑似 1 組')&&doc.includes('跨門檻補列 1 組'),'Executive triage summary missing');
  assert.equal((doc.match(/<wp:extent cx="2664000" cy="1665000"/g)||[]).length,4,'Word images need matching fixed bounded dimensions');
  console.log('DOCX ZIP structure, pair order, uniform photo frames, descriptions and both app integrations: PASS');
 })().catch(e=>{console.error(e);process.exitCode=1});
