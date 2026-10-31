@@ -55,6 +55,8 @@ function readZip(blob){
    assert.ok(html.includes('function notify(title,detail)'),kind+' missing centered modal');
  }
  const react=fs.readFileSync(path.join(root,'src/App.tsx'),'utf8');
- assert.ok(react.includes('ImageAuditDocx')&&react.includes('noticeModal'),'Desktop DOCX or modal not integrated');
+ assert.ok(react.includes('ImageAuditDocx')&&react.includes('setDialog')&&react.includes('role="alertdialog"'),'Desktop DOCX or centered modal not integrated');
+const selector=fs.readFileSync(path.join(root,'selector.html'),'utf8');
+assert.ok(selector.includes('id="desktop-guide"')&&selector.includes('啟動工程照片稽核.exe')&&selector.includes('index.html'),'Desktop installation instructions must be on the download page');
  console.log('DOCX ZIP structure, pair order, uniform photo frames, descriptions and both app integrations: PASS');
 })().catch(e=>{console.error(e);process.exitCode=1});
