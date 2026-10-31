@@ -569,6 +569,7 @@ const App = () => {
 
           for (const fa of listA) {
             for (const fb of listB) {
+              if(stopRef.current)throw new Error('已停止');
               tick++;
               const ea = embeddings[fa];
               const eb = embeddings[fb];
@@ -602,6 +603,8 @@ const App = () => {
                   matches:0,inliers:0,inlierRatio:0,coverage:0,alignedSSIM:null,differenceArea:null,
                   heatmap:null,note:'進階查核失敗：'+String(error).slice(0,100)};
               }
+              const patchSimilarity=localPatchScore(patches[fa],patches[fb]);
+              advanced.patchSimilarity=patchSimilarity;
               const rescued=score<listThreshold&&
                 (advanced.status==='verified'||advanced.status==='byte-identical');
               if(rescued)geometryRescued++;
@@ -609,8 +612,6 @@ const App = () => {
                 if(tick%5===0){setProgress({stage:'完整辨識 ②/②：逐組比對 '+tick+' / '+workload.pairs,done:tick,total:workload.pairs});await sleep(0)}
                 continue;
               }
-              const patchSimilarity=localPatchScore(patches[fa],patches[fb]);
-              advanced.patchSimilarity=patchSimilarity;
               if(prepared[fa]&&prepared[fb]&&advanced.status==='verified'){
                 // Heatmap is only generated for selected evidence groups.
                 advanced.heatmap=comparePrepared(prepared[fa]!,prepared[fb]!,true).heatmap;
@@ -948,7 +949,6 @@ const App = () => {
       if(!writer) throw Error('DOCX 產生器尚未載入，請重新下載最新完整桌面 ZIP。');
       const reportRows = [];
       for(const item of ordered){
-        const advanced=item.advanced;
         const [imageA,imageB] = await Promise.all([
           fileToJpegDataUrl(item.fileA, REPORT_MAX_SIDE, 0.83),
           fileToJpegDataUrl(item.fileB, REPORT_MAX_SIDE, 0.83),
@@ -956,7 +956,7 @@ const App = () => {
         reportRows.push({
           score:primaryScore(item),
           label:'跨版本共用視覺相似度',
-          detail:'DINOv2 特徵餘弦：'+(item.dino===null?'未取得':item.dino.toFixed(1)+'%')+'｜局部 Patch '+(item.patchSimilarity==null?'未支援':item.patchSimilarity.toFixed(1)+'%')+'｜pHash '+item.visual.hash.toFixed(1)+'%｜位置校正 '+item.visual.registered.toFixed(1)+'%｜64×64 像素 '+item.pixel.toFixed(2)+'%',
+          detail:(item.geometryRescued?'【幾何補列】':'')+'DINOv2 特徵餘弦：'+(item.dino===null?'未取得':item.dino.toFixed(1)+'%')+'｜局部 Patch '+(item.patchSimilarity==null?'未支援':item.patchSimilarity.toFixed(1)+'%')+'｜pHash '+item.visual.hash.toFixed(1)+'%｜位置校正 '+item.visual.registered.toFixed(1)+'%｜64×64 像素 '+item.pixel.toFixed(2)+'%',
           sourceA:item.sourceA,sourceB:item.sourceB,
           filenameA:item.fileA.name,filenameB:item.fileB.name,
           imageA,imageB,
@@ -1228,6 +1228,15 @@ const App = () => {
                 ))}
               </div>
 
+              {scanSummary&&(
+                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-950 leading-relaxed">
+                  <b>完整掃描完成：{scanSummary.total} 組跨資料夾照片</b>
+                  <div>FAST／BRIEF、RANSAC 與 SSIM 幾何配對：{scanSummary.checked} 組</div>
+                  <div>共同門檻之外，幾何高度疑似補列：{scanSummary.rescued} 組</div>
+                  <div>未完成之處理：{scanSummary.errors} 項</div>
+                  <p className="text-[11px] mt-1 text-emerald-800">所有配對均在開始分析時執行；沒有「前 20 組」限制，僅報告呈現疑似組別。</p>
+                </div>
+              )}
               <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
                 <div>
                   <div className="flex justify-between text-sm mb-1">
