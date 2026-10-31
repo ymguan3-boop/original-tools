@@ -19,13 +19,99 @@ export interface AdvancedResult {
   heatmap:string|null;
   note:string;
   patchSimilarity?:number|null;
+  method?:'FAST / BRIEF'|'多尺度 SIFT-style 梯度描述子'|'SHA-256';
+  overlap?:number|null;
+  siftMatches?:number;
 }
 type Frame={w:number;h:number;gray:Float32Array;mask:Uint8Array;canvas:HTMLCanvasElement};
 type Point={x:number;y:number;score:number;desc:Uint8Array};
 type Pair={a:Point;b:Point;distance:number};
-export interface PreparedAdvanced {frame:Frame;points:Point[];}
+
+type SiftPoint=Point & {gradient:Float32Array};
+/* A self-contained, patent-free SIFT-style descriptor fallback. It is NOT a
+ * binary-compatible OpenCV SIFT implementation: it uses multi-radius oriented
+ * 4x4x8 gradient histograms, normalization and nearest-neighbour ratio tests.
+ * It adds no downloads, credentials, or runtime dependency to the Windows EXE. */
+function siftFeatures(frame:Frame):SiftPoint[]{
+ const g=frame.gray,m=frame.mask,w=frame.w,h=frame.h;
+ const candidates:{x:number;y:number;energy:number}[]=[];
+ for(let y=20;y<h-20;y+=6)for(let x=20;x<w-20;x+=6){
+  if(!m[y*w+x])continue;
+  let energy=0,mean=0,meanSq=0,n=0;
+  for(let j=-3;j<=3;j+=2)for(let i=-3;i<=3;i+=2){
+   const v=g[(y+j)*w+x+i],dx=g[(y+j)*w+x+i+1]-g[(y+j)*w+x+i-1],
+     dy=g[(y+j+1)*w+x+i]-g[(y+j-1)*w+x+i];
+   energy+=Math.abs(dx)+Math.abs(dy);mean+=v;meanSq+=v*v;n++;
+  }
+  const variance=meanSq/n-(mean/n)**2;
+  if(energy>400&&variance>130)candidates.push({x,y,energy:energy*Math.sqrt(variance)});
+ }
+ candidates.sort((a,b)=>b.energy-a.energy);
+ const chosen:SiftPoint[]=[];
+ function descriptor(x:number,y:number,r:number):Float32Array|null{
+  const hist=new Float32Array(128);
+  let mx=0,my=0;
+  for(let j=-3*r;j<=3*r;j+=r)for(let i=-3*r;i<=3*r;i+=r){
+   const px=x+i,py=y+j;
+   mx+=g[py*w+px+1]-g[py*w+px-1];my+=g[(py+1)*w+px]-g[(py-1)*w+px];
+  }
+  const angle=Math.atan2(my,mx),cs=Math.cos(angle),sn=Math.sin(angle);
+  let total=0;
+  for(let cellY=0;cellY<4;cellY++)for(let cellX=0;cellX<4;cellX++)
+   for(let iy=0;iy<4;iy++)for(let ix=0;ix<4;ix++){
+    const u=((cellX*4+ix)-7.5)*r, v=((cellY*4+iy)-7.5)*r;
+    const xx=Math.round(x+cs*u-sn*v),yy=Math.round(y+sn*u+cs*v);
+    if(xx<2||xx>=w-2||yy<2||yy>=h-2||!m[yy*w+xx])continue;
+    const dx=g[yy*w+xx+1]-g[yy*w+xx-1],dy=g[(yy+1)*w+xx]-g[(yy-1)*w+xx];
+    const mag=Math.hypot(dx,dy),rot=(Math.atan2(dy,dx)-angle+Math.PI*4)%(Math.PI*2);
+    const bin=Math.min(7,Math.floor(rot*8/(Math.PI*2)));
+    const gauss=Math.exp(-(u*u+v*v)/(2*(8*r)**2));
+    hist[(cellY*4+cellX)*8+bin]+=mag*gauss;
+    total+=mag;
+   }
+  if(total<180)return null;
+  let norm=Math.hypot(...hist);if(norm<1e-6)return null;
+  for(let i=0;i<128;i++)hist[i]=Math.min(.2,hist[i]/norm);
+  norm=Math.hypot(...hist);for(let i=0;i<128;i++)hist[i]/=norm||1;
+  return hist;
+ }
+ for(const v of candidates){
+  if(chosen.length>=135)break;
+  if(chosen.some(p=>Math.abs(p.x-v.x)<8&&Math.abs(p.y-v.y)<8))continue;
+  const radii=[1,2,3];
+  for(const r of radii){
+   if(v.x<16*r+2||v.y<16*r+2||v.x>w-16*r-3||v.y>h-16*r-3)continue;
+   const gradient=descriptor(v.x,v.y,r);
+   if(gradient){chosen.push({x:v.x,y:v.y,score:v.energy,desc:new Uint8Array(16),gradient});break}
+  }
+ }
+ return chosen;
+}
+function matchSift(a:SiftPoint[],b:SiftPoint[]):Pair[]{
+ const forward=new Map<number,{j:number;d:number}>(),reverse=new Map<number,number>();
+ const dist=(p:SiftPoint,q:SiftPoint)=>{
+  let dot=0;for(let k=0;k<128;k++)dot+=p.gradient[k]*q.gradient[k];
+  return Math.max(0,2-2*dot);
+ };
+ for(let i=0;i<a.length;i++){
+  let first=Infinity,second=Infinity,j=-1;
+  for(let k=0;k<b.length;k++){
+   const d=dist(a[i],b[k]);if(d<first){second=first;first=d;j=k}else if(d<second)second=d;
+  }
+  if(j>=0&&first<.72&&first<.72*second)forward.set(i,{j,d:first});
+ }
+ for(let j=0;j<b.length;j++){
+  let first=Infinity,idx=-1;
+  for(let i=0;i<a.length;i++){const d=dist(a[i],b[j]);if(d<first){first=d;idx=i}}
+  reverse.set(j,idx);
+ }
+ return [...forward.entries()].filter(([i,v])=>reverse.get(v.j)===i)
+   .map(([i,v])=>({a:a[i],b:b[v.j],distance:v.d}));
+}
+
+export interface PreparedAdvanced {frame:Frame;points:Point[];sift:SiftPoint[];}
 /** Decode and build keypoint descriptors ONCE per uploaded photo, not per pair. */
-export async function prepareAdvanced(file:File):Promise<PreparedAdvanced>{const frame=await decode(file);return {frame,points:corners(frame)}}
+export async function prepareAdvanced(file:File):Promise<PreparedAdvanced>{const frame=await decode(file);return {frame,points:corners(frame),sift:siftFeatures(frame)}}
 const WIDTH=384,HEIGHT=288, CIRCLE=[[0,-3],[1,-3],[2,-2],[3,-1],[3,0],[3,1],[2,2],[1,3],[0,3],[-1,3],[-2,2],[-3,1],[-3,0],[-3,-1],[-2,-2],[-1,-3]];
 const PATTERN:(readonly [number,number,number,number])[]=(()=>{
   let seed=0x2ee15b32;const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
@@ -37,9 +123,13 @@ async function decode(file:File):Promise<Frame>{
   const canvas=document.createElement('canvas');canvas.width=WIDTH;canvas.height=HEIGHT;
   const c=canvas.getContext('2d',{willReadFrequently:true});if(!c)throw new Error('無法建立本機影像畫布');
   c.fillStyle='#7f7f7f';c.fillRect(0,0,WIDTH,HEIGHT);
-  const sc=Math.min(WIDTH/img.width,HEIGHT/img.height),w=Math.round(img.width*sc),h=Math.round(img.height*sc);
+  // Prefer the exact same conservative white-margin detector as the shared web comparator.
+  const bounds=(window as Window & {ImageAuditComparator?:{whiteBounds?:(image:ImageBitmap)=>{x:number;y:number;w:number;h:number}|null}}).ImageAuditComparator?.whiteBounds?.(img);
+  const source=bounds||{x:0,y:0,w:1,h:1};
+  const sw=img.width*source.w,sh=img.height*source.h;
+  const sc=Math.min(WIDTH/sw,HEIGHT/sh),w=Math.round(sw*sc),h=Math.round(sh*sc);
   const x=Math.floor((WIDTH-w)/2),y=Math.floor((HEIGHT-h)/2);
-  c.drawImage(img,x,y,w,h);
+  c.drawImage(img,img.width*source.x,img.height*source.y,sw,sh,x,y,w,h);
   const rgba=c.getImageData(0,0,WIDTH,HEIGHT).data,g=new Float32Array(WIDTH*HEIGHT),mask=new Uint8Array(g.length);
   for(let j=0;j<HEIGHT;j++)for(let i=0;i<WIDTH;i++){
    const p=j*WIDTH+i,k=p*4;g[p]=.299*rgba[k]+.587*rgba[k+1]+.114*rgba[k+2];
@@ -101,7 +191,7 @@ function transform(a:Point,b:Point,c:Point,d:Point):Similarity|null{
  const ux=c.x-a.x,uy=c.y-a.y,vx=d.x-b.x,vy=d.y-b.y;
  const den=ux*ux+uy*uy;if(den<150)return null;
  const r=(ux*vx+uy*vy)/den,im=(ux*vy-uy*vx)/den,scale=Math.hypot(r,im);
- if(scale<.55||scale>1.8)return null;
+ if(scale<.35||scale>3)return null;
  return {scale,cs:r,sn:im,tx:b.x-r*a.x+im*a.y,ty:b.y-im*a.x-r*a.y};
 }
 function inlier(model:Similarity,p:Pair):boolean{
@@ -129,7 +219,7 @@ function ransac(pairs:Pair[]):{model:Similarity|null;inlierPairs:Pair[]}{
   let den=0,re=0,im=0;
   for(const p of best){const x=p.a.x-ma,y=p.a.y-mb,u=p.b.x-na,v=p.b.y-nb;den+=x*x+y*y;re+=x*u+y*v;im+=x*v-y*u}
   if(den>1){re/=den;im/=den;const scale=Math.hypot(re,im);
-   if(scale>=.55&&scale<=1.8){
+   if(scale>=.35&&scale<=3){
     bestModel={scale,cs:re,sn:im,tx:na-re*ma+im*mb,ty:nb-im*ma-re*mb};
     best=pairs.filter(p=>inlier(bestModel!,p));
    }
@@ -160,28 +250,45 @@ function registeredSSIM(a:Frame,b:Frame,model:Similarity,includeHeatmap=true){
   const s=((2*muA*muB+c1)*(2*cov+c2))/((muA*muA+muB*muB+c1)*(va+vb+c2));
   totalSSIM+=Math.max(-1,Math.min(1,s));blocks++;
  }
- if(blocks<40||pixelCount<2000)return {ssim:null,differenceArea:null,heatmap:null};
+ if(blocks<40||pixelCount<2000)return {ssim:null,differenceArea:null,overlap:null,heatmap:null};
  if(ctx&&overlay)ctx.putImageData(overlay,0,0);
- return {ssim:Math.round(10000*Math.max(0,totalSSIM/blocks))/100,differenceArea:Math.round(10000*diffCount/pixelCount)/100,heatmap:heat?.toDataURL('image/jpeg',.75)??null};
+ return {ssim:Math.round(10000*Math.max(0,totalSSIM/blocks))/100,differenceArea:Math.round(10000*diffCount/pixelCount)/100,overlap:Math.round(pixelCount/Math.min(a.mask.reduce((n,v)=>n+v,0),b.mask.reduce((n,v)=>n+v,0))*1000)/10,heatmap:heat?.toDataURL('image/jpeg',.75)??null};
 }
-/** Core geometry only: no decoding/keypoint detection in a full cross-folder pair sweep. */
+/** Per-pair comparison using precomputed FAST/BRIEF and oriented gradient descriptors. */
 export function comparePrepared(aPrepared:PreparedAdvanced,bPrepared:PreparedAdvanced,includeHeatmap=false):AdvancedResult{
  const a=aPrepared.frame,b=bPrepared.frame;
- const pairs=match(aPrepared.points,bPrepared.points),geom=ransac(pairs);
- const inliers=geom.inlierPairs.length,ratio=pairs.length?inliers/pairs.length:0;
- let coverage=0;
- if(inliers>=4){
-  const xs=geom.inlierPairs.map(p=>p.a.x),ys=geom.inlierPairs.map(p=>p.a.y);
-  coverage=((Math.max(...xs)-Math.min(...xs))*(Math.max(...ys)-Math.min(...ys)))/(WIDTH*HEIGHT);
+ function calculate(pairs:Pair[],method:AdvancedResult['method']):AdvancedResult{
+  const geom=ransac(pairs),inliers=geom.inlierPairs.length,ratio=pairs.length?inliers/pairs.length:0;
+  let coverage=0;
+  if(inliers>=4){
+   const xs=geom.inlierPairs.map(p=>p.a.x),ys=geom.inlierPairs.map(p=>p.a.y);
+   coverage=((Math.max(...xs)-Math.min(...xs))*(Math.max(...ys)-Math.min(...ys)))/(WIDTH*HEIGHT);
+  }
+  const aligned=geom.model&&inliers>=4?registeredSSIM(a,b,geom.model,includeHeatmap):
+   {ssim:null,differenceArea:null,overlap:null,heatmap:null};
+  let status:AdvancedResult['status']='inconclusive',label='幾何證據不足';
+  if(inliers>=12&&ratio>=.48&&coverage>=.06&&aligned.ssim!==null&&aligned.ssim>=67&&
+     aligned.overlap!==null&&aligned.overlap>=20){
+    status='verified';label='高度疑似同一來源影像，優先查證';
+  }else if(inliers>=7&&ratio>=.3&&coverage>=.025){status='review';label='存在幾何對應，建議人工複核'}
+  return {status,label,method,matches:pairs.length,inliers,inlierRatio:Math.round(1000*ratio)/10,
+   coverage:Math.round(10000*coverage)/100,
+   alignedSSIM:aligned.ssim,differenceArea:aligned.differenceArea,overlap:aligned.overlap,heatmap:aligned.heatmap,
+   note:status==='verified'?'局部幾何和對齊結構支持疑似同源；仍須核對原圖及工程資料。':
+    status==='review'?'部分特徵一致，但尚不能確認同源。':
+    '特徵點不足、裁切或拍攝角度可能降低匹配；無法據此判定照片不同。'};
  }
- const aligned=geom.model&&inliers>=4?registeredSSIM(a,b,geom.model,includeHeatmap):{ssim:null,differenceArea:null,heatmap:null};
- let status:AdvancedResult['status']='inconclusive',label='幾何證據不足';
- if(inliers>=12&&ratio>=.48&&coverage>=.06&&aligned.ssim!==null&&aligned.ssim>=67){
-  status='verified';label='高度疑似同一來源影像，優先查證';
- }else if(inliers>=7&&ratio>=.3&&coverage>=.025){status='review';label='存在幾何對應，建議人工複核'}
- return {status,label,matches:pairs.length,inliers,inlierRatio:Math.round(1000*ratio)/10,coverage:Math.round(10000*coverage)/100,
-  alignedSSIM:aligned.ssim,differenceArea:aligned.differenceArea,heatmap:aligned.heatmap,
-  note:status==='verified'?'幾何對應與對齊後結構均支持可能同源；仍須核對原始照片及工程資料。':status==='review'?'已發現部分特徵對應，尚無足夠證據確認同源。':'特徵點不足、低紋理、較大透視變化或大幅裁切均可能降低匹配數；不能因此判定不同照片。'};
+ const fast=calculate(match(aPrepared.points,bPrepared.points),'FAST / BRIEF');
+ // Full-scan FAST always runs. SIFT-style descriptor fallback runs when
+ // FAST alone is inconclusive or cannot verify the pair.
+ if(fast.status==='verified'||!aPrepared.sift?.length||!bPrepared.sift?.length)return fast;
+ const pairs=matchSift(aPrepared.sift,bPrepared.sift);
+ const gradient=calculate(pairs,'多尺度 SIFT-style 梯度描述子');
+ gradient.siftMatches=pairs.length;
+ const rank=(x:AdvancedResult)=>x.status==='verified'?3:x.status==='review'?2:1;
+ if(rank(gradient)>rank(fast)||rank(gradient)===rank(fast)&&gradient.inliers>fast.inliers)return gradient;
+ fast.siftMatches=pairs.length;
+ return fast;
 }
 
 /** Standalone inspector may still process an arbitrary pair on demand. */
