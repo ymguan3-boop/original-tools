@@ -1,10 +1,13 @@
 # 工程照片交叉稽核系統（image-audit）
 
-找出跨資料夾重複出現的工程照片，用於查核重複請款、照片重複使用等情形，並可一鍵匯出 Word 查核報告。
+**版本分流（2026-10-31）：**
 
-**不需要 API Key、不需註冊、照片不外傳**：相似度計算用的 DINOv2 模型直接在瀏覽器本機執行，且因為跑在背景執行緒，分析期間畫面仍可正常操作。
+- **[選擇使用版本](https://ymguan3-boop.github.io/original-tools/image-audit/selector.html)**：先選擇 DINOv2 桌面 ZIP 或線上輕量版。
+- **[Windows DINOv2 桌面 ZIP](https://ymguan3-boop.github.io/original-tools/image-audit/image-audit-desktop-dinov2.zip)**：本機 DINOv2-small、量化 ONNX 與 WASM 已包進 ZIP。解壓後雙擊 `啟動工程照片稽核.exe`，由內建的 Windows 本機執行程式開啟瀏覽器，**無須安裝 Python**。依瀏覽器安全限制，DINOv2 版無法保證直接雙擊 `file://` HTML 運作。
+- **[線上輕量版](https://ymguan3-boop.github.io/original-tools/image-audit/)**：免下載、免 DINOv2，使用像素、感知雜湊與色彩特徵組合進行照片相似度初篩，支援 Word／CSV 匯出。
+- **[舊版直接雙擊 HTML ZIP](https://ymguan3-boop.github.io/original-tools/image-audit/image-audit-desktop-html-offline.zip)**：保留為相容下載，不包含 DINOv2，適合只能開啟 HTML 的環境。
 
-線上使用：<https://ymguan3-boop.github.io/original-tools/image-audit/>
+> 兩種演算法不可直接混用分數，照片相似度僅能作查核線索，仍須核對日期、工程日誌、契約及驗收資料。原下方 DINOv2 功能與技術說明屬「Windows DINOv2 桌面版」，並非現行線上輕量版。
 
 ## 操作流程（3 步）
 
