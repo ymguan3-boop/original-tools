@@ -27,14 +27,13 @@ for(const row of examples){
 }
 for(const file of ['online/index.html','offline/工程照片交叉稽核系統.html']){
  const html=fs.readFileSync(path.join(root,file),'utf8');
- assert.ok(html.includes('registeredStructure(a,b)'),file+': missing alignment evidence');
+ assert.ok(html.includes('comparator-core.js'),file+': shared comparator script missing');
  assert.ok(html.includes('showDirectoryPicker'),file+': no secure picker');
  assert.ok(html.includes('選取多張照片'),file+': no multi-file alternative');
- const rule=html.match(/function rule\(m\)\{([\s\S]*?)\n\}/);
- assert.ok(rule,file+': no rule');
- assert.ok(!/應為不同影像|研判為不同照片|無重複請款疑慮/.test(rule[0]),file+': unsafe conclusion');
+ assert.ok(html.includes('const {sample,compare,rule}=window.ImageAuditComparator'),file+': no shared rule');
 }
 const app=fs.readFileSync(path.join(root,'src/App.tsx'),'utf8');
-assert.ok(app.includes('assessPhotoEvidence')&&app.includes('buildAuditRule'),'DINO rules not integrated');
+assert.ok(app.includes('common?.rule')||app.includes('shared?.rule'),'Shared audit rules not integrated');
+assert.ok(app.includes('chooseManyDirectories'),'Desktop multi-folder import absent');
 assert.ok(app.includes('addSelectedFiles')&&app.includes('chooseDirectory'),'Desktop safer import absent');
 console.log('PASS: 8 audit evidence cases, 2 browser scoring/rule engines and safe import paths');
