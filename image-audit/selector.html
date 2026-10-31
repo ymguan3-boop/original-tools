@@ -63,7 +63,7 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
 <div class="steps">
  <article class="step"><h3>下載並完整解壓縮</h3><p>點選上方「下載 DINOv2 桌面版 ZIP」，在檔案總管對 ZIP 按右鍵，選擇「解壓縮全部」。<strong>不要直接在 ZIP 內執行 EXE</strong>，也不要將 EXE 單獨移出資料夾。</p></article>
  <article class="step"><h3>雙擊啟動程式</h3><p>開啟解壓縮後的資料夾，雙擊 <code>啟動工程照片稽核.exe</code>。程式會啟動本機服務，並自動開啟預設瀏覽器（建議 Chrome 或 Edge）。</p></article>
- <article class="step"><h3>匯入照片並分析</h3><p>在網頁介面加入<strong>至少兩個</strong>工程照片資料夾，按「開始分析」，先檢視與網頁版相同的共同視覺分數，再點選疑似照片組別執行局部特徵幾何驗證與 SSIM，並查看 DINOv2 輔助特徵與差異熱區。進行人工篩選後可匯出 <code>.docx</code> 查核報告。</p></article>
+ <article class="step"><h3>匯入照片並分析</h3><p>在網頁介面點「多個資料夾（連續選取）」，重複按「選取下一個資料夾」挑選不同路徑來源，最後點「完成加入」，也可從檔案總管一次拖入多個資料夾；至少加入<strong>兩個</strong>工程照片資料夾，按「開始分析」，先檢視與網頁版相同的共同視覺分數，再點選疑似照片組別執行局部特徵幾何驗證與 SSIM，並查看 DINOv2 輔助特徵與差異熱區。進行人工篩選後可匯出 <code>.docx</code> 查核報告。</p></article>
  <article class="step"><h3>使用完畢再關閉</h3><p>使用期間<strong>請保持 EXE 啟動後的命令視窗開啟</strong>；關閉視窗就會停止本機網頁服務。要再次使用時，只需重新雙擊 EXE。</p></article>
 </div>
 <div class="guide-note"><strong>檔案保留提醒：</strong> ZIP 中的 <code>index.html</code> 是瀏覽器介面本體，不是多餘檔案。<code>assets/</code>、<code>models/</code>、<code>docxWriter.js</code> 等亦為程式資源。請保留解壓縮後的完整資料夾；操作說明已集中在本網頁，ZIP 不必再附獨立的 TXT 說明檔。</div>
@@ -77,7 +77,8 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
  <details><summary>為什麼雙擊 EXE 後會開啟瀏覽器？可以刪掉 HTML 嗎？</summary><p>EXE 只負責在自己的電腦啟動本機 HTTP 服務（<code>127.0.0.1</code> 隨機連接埠）；真正的操作畫面由 <code>index.html</code> 和其他資源提供。因此 HTML 必須保留，不能單獨刪除。</p></details>
  <details><summary>需要連網或安裝其他軟體嗎？</summary><p>基本 DINOv2 圖像推論使用 ZIP 內的 ONNX 模型和 WebAssembly，無須安裝 Python / Node.js，也無須連網。若自行啟用 OpenRouter AI 文字解說，才需要網路與 API 金鑰；啟用時縮圖可能傳送至第三方服務，應先確認機關資安政策。</p></details>
  <details><summary>Windows 顯示「保護您的電腦」或未簽章警告怎麼辦？</summary><p>本工具的 EXE 由 GitHub Actions 編譯，未提供商業程式碼簽章。請先確認下載網址是本專案官方頁面，必要時交由資訊單位檢查，確認可信後再依機關規定執行；不要為了使用工具而關閉系統的安全防護。</p></details>
- <details><summary>為什麼打不開網頁或找不到模型？</summary><p>請先確認 ZIP 已完整解壓縮，並檢查 <code>index.html</code>、<code>assets/</code>、<code>models/</code> 均與 EXE 位於同一資料夾。如果瀏覽器未自動開啟，可使用 EXE 視窗顯示的 <code>http://127.0.0.1:連接埠/</code> 網址，貼到 Chrome 或 Edge。</p></details>
+ <details><summary>為什麼 Windows 不能在資料夾選取器中按 Ctrl 一次多選？</summary><p>Chrome、Edge 的原生資料夾選取對話框通常一次只開放選一個資料夾。因此新版「多個資料夾」會先打開批次匯入視窗：每次選一個不同路徑的資料夾，累積後按「完成加入」；或從檔案總管一次拖入多個資料夾到批次匯入區。想將共同父資料夾內的第一層子資料夾分組，也可按「父資料夾自動分組」。</p></details>
+<details><summary>為什麼打不開網頁或找不到模型？</summary><p>請先確認 ZIP 已完整解壓縮，並檢查 <code>index.html</code>、<code>assets/</code>、<code>models/</code> 均與 EXE 位於同一資料夾。如果瀏覽器未自動開啟，可使用 EXE 視窗顯示的 <code>http://127.0.0.1:連接埠/</code> 網址，貼到 Chrome 或 Edge。</p></details>
  <details><summary>相似度高是否代表施工照片重複請款？</summary><p>不是。相似度只表示視覺特徵接近，不能直接推論違規或重複請款。仍應比對照片時間、施工日誌、工項數量、契約及驗收資料。</p></details>
 </div>
 </section>
