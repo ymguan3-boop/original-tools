@@ -20,9 +20,25 @@ dialog.audit-dialog::backdrop{background:rgba(16,32,55,.45);backdrop-filter:blur
 </style>
 </head>
 <body>
-<header><span class="pill">線上版 · 不使用 DINOv2</span><h1>工程照片交叉稽核系統</h1><div class="sub">跨資料夾照片比對 · 風險初篩 · 差異說明 · Word 查核報告</div></header>
+<header><span class="pill">線上版 · 不使用 DINOv2</span><h1>工程照片交叉稽核系統</h1><div class="sub">跨資料夾照片比對 · 風險初篩 · 差異說明 · DOCX 查核報告</div></header>
 <main class="wrap"><div class="panel"><a href="./selector.html" style="color:#1f5c9c;font-weight:700;text-decoration:none">← 返回版本選擇（線上版 / DINOv2 桌面版）</a></div>
 <div class="panel"><div class="row between"><strong>使用環境</strong><span id="env" class="pill">偵測中</span></div><p class="muted">本線上版本不需要安裝 Python、Node.js 或其他軟體。所有<strong>照片相似度運算在本機瀏覽器</strong>完成；不會自動上傳照片。可選擇使用 OpenRouter 線上 AI 文字解說（需網路、金鑰及明確授權，會將選取的縮圖送往第三方）。</p><div class="warning">本線上版採用pHash／dHash 感知雜湊、明暗結構相關性及邊緣一致性進行交叉驗證，<strong>不使用 DINOv2</strong>。DINOv2 模型保留於可下載的桌面版。相似度只是稽核線索，須由人員核對現場、日期、合約及驗收資料，不可直接認定重複請款。</div></div>
+<section class="panel" id="parameter-guide">
+<details><summary style="font-size:17px;font-weight:800;color:#205992;cursor:pointer">辨識參數及用途說明（點此展開）</summary>
+<p class="muted">本線上／免安裝 HTML 版本以<strong>快速初篩</strong>為目標，不加載大型語意、分割或物件偵測模型。照片在本機瀏覽器計算；只有使用者主動啟用第三方文字 AI，並同意傳送縮圖時才會連線傳圖。分數不是同源機率，也不是違規機率。</p>
+<div class="grid">
+<div class="note"><b>pHash（感知雜湊）</b>：比較縮放與轉存後的主要影像頻率，屬候選照片篩選。主要證據占共同基礎分數 38%（先經正規化）。</div>
+<div class="note"><b>dHash（差異雜湊）</b>：比較相鄰像素亮暗變化與粗略輪廓，基礎分數占 11%。</div>
+<div class="note"><b>明暗結構相關性</b>：比較 32×32 採樣格的空間亮暗布局，基礎分數占 33%。對光線、雨天與大面積同色區域須審慎判讀。</div>
+<div class="note"><b>邊緣一致性</b>：比對灰階邊緣變化方向及分布，基礎分數占 18%；輕微位移與裁切可能降低分數。</div>
+<div class="note"><b>像素 RGB 差異、色彩直方圖</b>：為查核輔助證據，RGB 差異亦用於高度相似照片的交叉驗證；色彩非獨立加權的主分數。</div>
+<div class="note"><b>全圖／中心裁切＋位置校正</b>：取較可信的候選區域，於約 32×32 特徵圖測試 ±4 格的位移，以減少輕微位置與邊框差異。不是特徵點對位，也不能完全處理大幅旋轉或遮蔽。</div>
+</div>
+<p class="muted" style="margin-top:12px"><b>計分原則：</b>基礎權重為 pHash 38%、明暗結構 33%、邊緣 18%、dHash 11%；另有低可信度上限、強一致性補正與多證據近似重複校正。因此畫面上的最終分數<strong>不是將單項百分比直接線性平均</strong>，且會受這些規則影響。</p>
+<p class="muted"><b>為何不加入 SAM、DINOv2、YOLO、Grounding DINO？</b>它們分別增加模型下載、記憶體、推論時間與部署複雜度，且無法單獨證明同一原始照片。更精細的局部特徵幾何驗證、RANSAC、對齊 SSIM 及 DINOv2 局部特徵保留給可下載的 Windows 桌面版<strong>個別照片進階查核</strong>，不改動兩版的共同快速篩選分數。</p>
+<p class="warning">工程查核原則：照片相似度只提供疑點。拍攝角度、壓縮、曝光、裁切或相似工項都可能造成誤差；須再核對原始檔、拍攝時間、工項數量、施工日誌與驗收資料。</p>
+</details>
+</section>
 <section class="panel"><div class="step">步驟 1 · 匯入並比對</div><h2>匯入工程照片資料夾</h2><div class="row"><button class="btn" id="addFolder">＋ 加入單一資料夾</button><button class="btn secondary" id="addManyFolders">＋ 一次加入多個資料夾</button><button class="btn secondary" id="addFiles">＋ 選取多張照片</button><button class="btn secondary" id="clearFolders">清空資料夾</button><input id="folderInput" type="file" accept="image/*" webkitdirectory directory multiple hidden><input id="manyFolderInput" type="file" webkitdirectory directory multiple hidden><input id="fileInput" type="file" accept="image/*" multiple hidden></div><p class="muted">可加入單一資料夾，或選擇一個包含多個子資料夾的「父資料夾」一次分組匯入。分散在不同路徑的資料夾請重複按單一加入。瀏覽器可能顯示資料夾讀取授權，網頁無法關閉此安全提示。至少需要 2 個不同照片批次；只比較不同群組的照片。支援 JPG、PNG、WebP、BMP 及瀏覽器可解碼的圖片。大批照片比對需要較多時間。</p><div id="folders"><p class="hint">尚未加入資料夾。</p></div><div class="row" style="margin-top:16px"><div class="field narrow"><label for="threshold">列出門檻：<strong id="thresholdVal">85%</strong></label><input id="threshold" type="range" min="50" max="100" value="85"></div><button class="btn" id="run">開始交叉比對</button><button class="btn warn" id="stop" disabled>停止</button></div><div id="progressWrap" class="hidden"><div class="progress"><div id="progressBar"></div></div><div class="hint" id="progressText" aria-live="polite"></div></div><p id="message" class="muted" role="status"></p></section>
 <section class="panel"><div class="step">步驟 2 · 產生說明</div><h2>差異分析與文字結論</h2><div class="row"><button class="btn secondary" id="notes">產生全部規則說明</button><div class="field"><label for="apiKey">OpenRouter API Key（選填，不會儲存）</label><input id="apiKey" type="password" autocomplete="off" placeholder="sk-or-v1-…"></div><div class="field narrow"><label for="model">視覺模型 ID</label><input id="model" type="text" value="openrouter/free"></div><div class="field narrow"><label for="topN">AI 分析前幾組</label><input id="topN" type="number" min="1" max="100" value="5"></div></div><div class="row" style="margin-top:11px"><label><input type="checkbox" id="consent"> 我同意將所選照片的縮圖傳送到 OpenRouter 及其模型供應商</label><button class="btn secondary" id="aiRun">以線上 AI 產生前 N 組說明</button></div><p class="muted">不填金鑰即可離線產生全部規則說明。使用 AI 時需要網路；若服務不接受本機 HTML 的跨來源請求，會提示失敗並保留離線說明。<strong>請勿將包含敏感資訊的公務照片送至外部 AI，除非已獲授權。</strong></p></section>
 <section class="panel"><div class="step">步驟 3 · 檢視與匯出</div><div class="row between"><h2 style="margin:0">交叉比對結果</h2><div class="row"><button class="btn secondary" id="csv">匯出 CSV</button><button class="btn" id="word">匯出 DOCX 查核報告</button></div></div><p class="muted">產生真正的 <code>.docx</code> 文件，依相似度由高至低排列每組照片與查核說明；雙圖置中於固定同尺寸相框，維持原比例，不超出 A4 頁面。</p><div id="stats" class="stats"></div><div id="matches"><p class="hint">尚無比對結果。</p></div><div class="row between" style="margin-top:14px"><span class="hint" id="pageLabel"></span><div class="row"><button class="smallbtn" id="prev">上一頁</button><button class="smallbtn" id="next">下一頁</button></div></div></section>
