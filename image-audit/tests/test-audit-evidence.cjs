@@ -33,7 +33,8 @@ for(const file of ['online/index.html','offline/工程照片交叉稽核系統.h
  assert.ok(html.includes('const {sample,compare,rule}=window.ImageAuditComparator'),file+': no shared rule');
 }
 const app=fs.readFileSync(path.join(root,'src/App.tsx'),'utf8');
-assert.ok(app.includes('common?.rule')||app.includes('shared?.rule'),'Shared audit rules not integrated');
+assert.ok(app.includes('reportAPI().formatRule('),'Standardized local audit evidence is not integrated');
+assert.ok(app.includes('const visual=common.compare(va,vb)'),'Shared visual screening no longer integrated');
 assert.ok(app.includes('chooseManyDirectories'),'Desktop multi-folder import absent');
 assert.ok(app.includes('addSelectedFiles')&&app.includes('chooseDirectory'),'Desktop safer import absent');
 console.log('PASS: 8 audit evidence cases, 2 browser scoring/rule engines and safe import paths');
