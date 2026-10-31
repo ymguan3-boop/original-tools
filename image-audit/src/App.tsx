@@ -270,7 +270,6 @@ const App = () => {
   const [results, setResults] = useState<MatchItem[]>([]);
   const [selectedRanges, setSelectedRanges] = useState<Set<string>>(new Set());
   const [selectedResult, setSelectedResult] = useState<MatchItem | null>(null);
-  const [advancedBusy,setAdvancedBusy] = useState(false);
   const [scanSummary,setScanSummary] = useState<{total:number;checked:number;errors:number;rescued:number}|null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [notice, setNotice] = useState<string | null>(null);
@@ -935,50 +934,9 @@ const App = () => {
     notify('差異說明已完成', 'AI 撰寫 '+aiDone+' 組、規則判定 '+ruleDone+' 組'+(failed ? '、失敗 '+failed+' 組' : '')+'。');
   };
 
-  /* Advanced check is optional in the UI and automatically run on the first
-     20 export rows; never changes the cross-version score or filter. */
-  const checkAdvanced=async(item:MatchItem):Promise<AdvancedResult>=>{
-    if(item.advanced)return item.advanced;
-    const [ha,hb]=await Promise.all([contentHash(item.fileA),contentHash(item.fileB)]);
-    if(ha&&hb&&ha===hb){
-      return {status:'byte-identical',label:'檔案位元組完全相同',matches:0,inliers:0,
-        inlierRatio:100,coverage:100,alignedSSIM:100,differenceArea:0,heatmap:null,
-        patchSimilarity:item.patchSimilarity??null,
-        note:'SHA-256 完全一致：照片位元組內容相同，但不代表違規或重複計價。'};
-    }
-    const advanced=await advancedCompare(item.fileA,item.fileB);
-    advanced.patchSimilarity=item.patchSimilarity??null;
-    return advanced;
-  };
-  const runAdvanced=async(item:MatchItem)=>{
-    if(advancedBusy||batchAdvancedBusy||isExporting)return;
-    setAdvancedBusy(true);
-    try{
-      const advanced=await checkAdvanced(item);
-      const updated={...item,advanced};
-      setResults(prev=>prev.map(r=>r.id===item.id?updated:r));
-      setSelectedResult(prev=>prev?.id===item.id?updated:prev);
-    }catch(e){notify('進階驗證未完成',e instanceof Error?e.message:String(e),'warning')}
-    finally{setAdvancedBusy(false)}
-  };
-  const batchAdvanced=async()=>{
-    if(batchAdvancedBusy||isExporting||isAnalyzing||!results.length)return;
-    setBatchAdvancedBusy(true);
-    const rows=[...results].sort((a,b)=>b.score-a.score).slice(0,ADVANCED_BATCH_LIMIT);
-    const mapped=new Map<string,AdvancedResult>();
-    let failed=0;
-    try{
-      for(let i=0;i<rows.length;i++){
-        setNotice('桌面版局部特徵／RANSAC／SSIM 進階查核 '+(i+1)+' / '+rows.length+' 組（不影響共同相似度）');
-        try{mapped.set(rows[i].id,await checkAdvanced(rows[i]))}
-        catch(error){failed++;console.warn('進階查核失敗',rows[i].id,error)}
-        await sleep(0);
-      }
-      setResults(prev=>prev.map(r=>mapped.has(r.id)?{...r,advanced:mapped.get(r.id)}:r));
-      setSelectedResult(prev=>prev&&mapped.has(prev.id)?{...prev,advanced:mapped.get(prev.id)}:prev);
-      notify('批次進階查核完成','已完成 '+mapped.size+' 組；失敗 '+failed+' 組。可查看局部特徵點、RANSAC、SSIM 和熱區；共同分數保持不變。');
-    }finally{setBatchAdvancedBusy(false);setNotice(null)}
-  };
+  /* All photo pairs already receive local geometry in runAnalysis.
+     DOCX export reads the immutable computed results; it never reruns only 20. */
+
   /* ---------------------- 匯出真正的 DOCX (OOXML) ---------------------- */
   const exportToWord = async () => {
     if (!results.length) { notify('沒有可匯出的照片', '請先完成跨資料夾照片比對。', 'warning'); return; }
@@ -991,20 +949,8 @@ const App = () => {
       const writer = (window as Window & {ImageAuditDocx?: {create: (arg: unknown)=>Promise<Blob>}}).ImageAuditDocx;
       if(!writer) throw Error('DOCX 產生器尚未載入，請重新下載最新完整桌面 ZIP。');
       const reportRows = [];
-      const verified=new Map<string,AdvancedResult>();
-      let advancedSkipped=0,advancedFailed=0;
-      for(let i=0;i<ordered.length;i++){
-        const item=ordered[i];
-        let advanced=item.advanced;
-        // Exported DOCX must actually contain additional desktop evidence,
-        // not merely DINOv2 scores. Limit the automatic work for large batches.
-        if(!advanced&&i<ADVANCED_BATCH_LIMIT){
-          setNotice('DOCX 產製前進階查核 '+(i+1)+' / '+Math.min(ordered.length,ADVANCED_BATCH_LIMIT)+' 組（FAST / BRIEF、RANSAC、SSIM）');
-          try{advanced=await checkAdvanced(item);verified.set(item.id,advanced)}
-          catch(error){advancedFailed++;console.warn('DOCX 進階查核失敗',item.id,error)}
-          await sleep(0);
-        }else if(!advanced)advancedSkipped++;
-
+      for(const item of ordered){
+        const advanced=item.advanced;
         const [imageA,imageB] = await Promise.all([
           fileToJpegDataUrl(item.fileA, REPORT_MAX_SIDE, 0.83),
           fileToJpegDataUrl(item.fileB, REPORT_MAX_SIDE, 0.83),
@@ -1028,10 +974,9 @@ const App = () => {
           analysisSource:item.analysisSource==='ai'?'OpenRouter AI':'本機規則模板'
         });
       }
-      if(verified.size)setResults(prev=>prev.map(r=>verified.has(r.id)?{...r,advanced:verified.get(r.id)}:r));
       const blob = await writer.create({
         title:'工程照片完整查核報告',
-        engine:'共同視覺引擎 V2.3.0（原圖取樣；門檻 '+listThreshold+'%；資料夾 '+folders.length+'；上傳照片 '+folders.reduce((n,f)=>n+f.files.length,0)+'；跨組配對 '+workload.pairs+'）＋ DINOv2-small 輔助＋ FAST／BRIEF・RANSAC・SSIM（自動驗證前 '+ADVANCED_BATCH_LIMIT+' 組）',
+        engine:'桌面版 v2.4.0；完整分析 '+(scanSummary?.total??0)+' 組跨批次照片，幾何驗證 '+(scanSummary?.checked??0)+' 組，失敗 '+(scanSummary?.errors??0)+' 項，幾何補列 '+(scanSummary?.rescued??0)+' 組；共同視覺門檻 '+listThreshold+'%；DINOv2-small、Patch（可用時）、SHA-256、FAST／BRIEF、RANSAC、對齊 SSIM',
         rows:reportRows
       });
       const url=URL.createObjectURL(blob),link=document.createElement('a');
@@ -1040,7 +985,7 @@ const App = () => {
       document.body.appendChild(link);link.click();link.remove();
       setTimeout(()=>URL.revokeObjectURL(url),30000);
       notify('DOCX 報告匯出成功',
-        '共 '+ordered.length+' 組，排序為共同相似度由高至低。\n進階幾何驗證新增 '+verified.size+' 組；因查核上限略過 '+advancedSkipped+' 組；失敗 '+advancedFailed+' 組。');
+        '共 '+ordered.length+' 組疑似同源照片。全部跨批次照片配對已在開始分析時完成本機辨識，報告逐組記載各技術結果。');
     } catch (e) {
       console.error(e);
       notify('DOCX 匯出失敗',String((e as Error)?.message??e),'warning');
@@ -1439,12 +1384,6 @@ const App = () => {
 
                   <div className="h-6 w-[1px] bg-slate-300 mx-1" />
 
-                  <button type="button"
-                    onClick={()=>{void batchAdvanced()}}
-                    disabled={batchAdvancedBusy||isExporting||isAnalyzing}
-                    className="flex-1 md:flex-none text-xs bg-indigo-700 text-white px-3 py-2 rounded font-medium hover:bg-indigo-800 disabled:opacity-50">
-                    {batchAdvancedBusy?'幾何查核中…':'進階批次查核（前 '+ADVANCED_BATCH_LIMIT+' 組）'}
-                  </button>
                   <button
                     onClick={() => void exportToWord()}
                     disabled={isExporting}
@@ -1603,10 +1542,7 @@ const App = () => {
                   <div>A：{selectedResult.sourceA} / {selectedResult.fileA.name}</div>
                   <div>B：{selectedResult.sourceB} / {selectedResult.fileB.name}</div>
                 </div>
-                <button type="button" disabled={advancedBusy} onClick={()=>{void runAdvanced(selectedResult);}}
-                  className="w-full rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white font-semibold text-sm py-2 mb-3">
-                  {advancedBusy?'本機局部驗證中…':selectedResult.advanced?'重新進階查核':'進階驗證：局部特徵＋RANSAC＋SSIM'}
-                </button>
+                <p className="mb-3 text-xs text-blue-800 font-semibold">以下進階辨識已在按「開始分析」後自動完成，無須另外按鈕。</p>
                 {selectedResult.advanced&&(
                   <section className="rounded-lg border border-amber-200 bg-amber-50 p-3 mb-3 text-xs text-amber-950 space-y-1">
                     <strong className="block text-sm">{selectedResult.advanced.label}</strong>
