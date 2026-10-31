@@ -37,7 +37,6 @@ function sample(img,crop=false){
  const phash=Uint8Array.from(ac.slice(1),v=>v>median?1:0);
  return {rgb,gray,hist,hash,phash};
 }
-function feature(f){return imgData(f).then(({url,img})=>({file:f,thumb:url,full:sample(img),center:sample(img,true)}))}
 // Local grayscale alignment: tolerate small crops, resizes and framing shifts.
 // This is a spatial clue, not geometric feature-point proof.
 function registeredStructure(a,b){
