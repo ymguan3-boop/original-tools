@@ -94,7 +94,20 @@ npm run build    # 產出 dist/
 MIT
 
 
-## 本機桌面版（離線）
+## 免安裝 HTML 桌面離線版（新版）
+
+直接從 [原創工具集首頁](https://ymguan3-boop.github.io/original-tools/) 點選本系統卡片，或於 [線上版](https://ymguan3-boop.github.io/original-tools/image-audit/) 點擊「下載桌面 HTML 離線版（ZIP）」。
+
+- [直接下載 ZIP](https://ymguan3-boop.github.io/original-tools/image-audit/image-audit-desktop-html-offline.zip)
+- 解壓縮後雙擊 `工程照片交叉稽核系統.html`，用 Chrome 或 Edge 開啟。
+- **不需 Python、Node.js、安裝程式、HTTP 伺服器或網路**，便可完成不同資料夾照片交叉初篩、規則差異說明與 Word（.doc）／CSV 匯出。
+- 純 HTML `file://` 版不採用 DINOv2（模型 Worker 與 WASM 無法在所有瀏覽器的 `file://` 環境可靠執行），改用像素、感知雜湊與色彩特徵組合初篩；**不能與線上版 DINOv2 分數視為等價**。
+- 選擇性 OpenRouter AI 解說需連線、API Key 與縮圖外傳同意；本機 HTML 呼叫第三方 API 可能受 CORS 限制。
+- 原始碼在 `image-audit/offline/`，GitHub Actions 每次部署時自動產生上述 ZIP。
+
+照片相似不等於違規或重複請款，須結合施工日誌、契約、拍攝時間及現場情形查證。
+
+## 舊版桌面發行包（v1.1.0，需 Python）
 
 不想連網或想完全離線使用，可下載本機桌面版：
 
