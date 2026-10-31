@@ -38,10 +38,10 @@ function dataBytes(url) {
  for(let i=0;i<raw.length;i++)result[i]=raw.charCodeAt(i);
  return result;
 }
-async function normalizedJpeg(dataUrl) {
+async function normalizedJpeg(dataUrl,wide=false) {
  const img=new Image();
  await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('照片無法解碼'));img.src=dataUrl;});
- const W=640,H=400,canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;
+ const W=640,H=wide?240:400,canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;
  const ctx=canvas.getContext('2d');
  if(!ctx)throw new Error('瀏覽器不支援 Canvas，無法製作 DOCX 圖片');
  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,H);
@@ -105,7 +105,7 @@ async function create(input) {
   for(const [kind,key,offset] of [['feature','featureImage',3],['heatmap','evidenceImage',4]]){
    if(row[key]){
     const file='photo'+String(i+1).padStart(4,'0')+'-'+kind+'.jpeg';
-    files.push(['word/media/'+file,await normalizedJpeg(row[key])]);
+    files.push(['word/media/'+file,await normalizedJpeg(row[key],kind==='feature')]);
     rels.push('<Relationship Id="rId'+(i*4+offset)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/'+file+'"/>');
    }
   }
