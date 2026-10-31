@@ -42,7 +42,7 @@ function loadComparator(file){
    }}};
   }}
  };
- const f=vm.runInNewContext(script+'\n({sample,similarityOne,compare})',mock);
+ const f=vm.runInNewContext(script+'\n({sample,similarityOne,compare,registeredStructure})',mock);
  return f;
 }
 for(const file of [path.join(ROOT,'online/index.html'),path.join(ROOT,'offline/工程照片交叉稽核系統.html')]){
@@ -50,11 +50,18 @@ for(const file of [path.join(ROOT,'online/index.html'),path.join(ROOT,'offline/�
  const sample=(name)=>f.sample(image(name));
  const a=sample('A'),noisy=sample('A-noisy'),b=sample('B'),flat=sample('flat'),other=sample('flat-other');
  const identical=f.similarityOne(a,a);
+  const registered=f.registeredStructure(a,a);
+  const flatRegistered=f.registeredStructure(flat,other);
+  const composite=f.compare({full:a,center:a},{full:noisy,center:noisy});
  const near=f.similarityOne(a,noisy);
  const unrelated=f.similarityOne(a,b);
  const flatUnrelated=f.similarityOne(flat,other);
  console.log(path.relative(ROOT,file),{identical:identical.score,near:near.score,unrelated:unrelated.score,flatUnrelated:flatUnrelated.score});
  assert.ok(identical.score>=99.9,'exact duplicate should be 100');
+  assert.ok(registered>=99,'fully aligned photo must score high');
+  assert.ok(flatRegistered<50,'flat scenes must not have geometrical evidence');
+  assert.ok(composite.score>=85,'near-identical photos should not be missed by primary screening');
+  assert.ok(composite.strongEvidence,'near-identical photos should warrant priority review');
  assert.ok(near.score>=88,'near-identical images with small brightness/noise changes must score high');
  assert.ok(near.score>unrelated.score+25,'near-duplicates must be distinguishable');
  assert.ok(unrelated.score<78,'different image structures must not be misclassified at 78%');
