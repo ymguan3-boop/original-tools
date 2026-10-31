@@ -48,6 +48,22 @@ jobs:
         working-directory: image-audit
         run: npm run build -- --base=./
 
+      - name: Include DOCX generator in DINOv2 desktop build
+        run: |
+          cp image-audit/shared/docxWriter.js image-audit/dist/docxWriter.js
+          python3 - <<'PY'
+          from pathlib import Path
+          page=Path('image-audit/dist/index.html')
+          s=page.read_text()
+          assert '</head>' in s
+          page.write_text(s.replace('</head>', '<script src="./docxWriter.js"></script></head>'))
+          PY
+
+      - name: Validate DOCX reports with embedded paired images
+        run: |
+          node image-audit/tests/test-docx.cjs
+          python3 image-audit/tests/check-docx.py
+
       - name: Test browser image scoring (false positives and near duplicates)
         run: node image-audit/tests/test-comparator.cjs
 
@@ -94,6 +110,7 @@ jobs:
           # DINOv2 is desktop-only. Online edition uses pixel and perceptual hashing.
           cp image-audit/online/index.html deploy/image-audit/index.html
           cp image-audit/selector.html deploy/image-audit/selector.html
+          cp image-audit/shared/docxWriter.js deploy/image-audit/docxWriter.js
           # Ensure current online edition is also the fallback page.
           cp deploy/image-audit/index.html deploy/image-audit/404.html
           # Build a self-contained ZIP from static offline HTML (no Python needed by users).
@@ -107,6 +124,7 @@ jobs:
               for file in sorted(source.iterdir()):
                   if file.is_file():
                       archive.write(file, arcname=file.name)
+              archive.write('image-audit/shared/docxWriter.js', arcname='docxWriter.js')
           assert output.stat().st_size > 1024, 'Desktop ZIP is empty'
           print('Offline HTML ZIP ready:', output, output.stat().st_size, 'bytes')
           PY
