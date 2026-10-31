@@ -7,8 +7,8 @@ import {
   SquareStack,
 } from 'lucide-react';
 import { getDinoClient } from './dinoClient';
-import { advancedCompare } from './advancedVision';
-import type { AdvancedResult } from './advancedVision';
+import { advancedCompare, prepareAdvanced, comparePrepared } from './advancedVision';
+import type { AdvancedResult, PreparedAdvanced } from './advancedVision';
 import type { ModelState } from './dinoClient';
 import { assessPhotoEvidence, buildAuditRule } from './auditEvidence';
 import { getCached, setCached, clearEmbedCache, countCached } from './embedCache';
@@ -23,8 +23,8 @@ import { getCached, setCached, clearEmbedCache, countCached } from './embedCache
 const DINO_MODEL_ID = 'Xenova/dinov2-small';
 /** 清單最多保留的組數，避免記憶體爆掉 */
 const MAX_RESULTS = 2000;
-const ADVANCED_BATCH_LIMIT = 20;
-const DESKTOP_VERSION = '2.3.0';
+const DESKTOP_FULL_SCAN = true;
+const DESKTOP_VERSION = '2.4.0';
 /** 清單每頁顯示組數 */
 const PAGE_SIZE = 30;
 
@@ -69,6 +69,7 @@ interface MatchItem {
   score: number;
   visual:VisualMetrics;
   advanced?:AdvancedResult;
+  geometryRescued?:boolean;
   patchSimilarity?:number|null;
   /** DINOv2 輔助特徵餘弦分數；不影響共同篩選門檻 */
   dino: number | null;
@@ -270,7 +271,7 @@ const App = () => {
   const [selectedRanges, setSelectedRanges] = useState<Set<string>>(new Set());
   const [selectedResult, setSelectedResult] = useState<MatchItem | null>(null);
   const [advancedBusy,setAdvancedBusy] = useState(false);
-  const [batchAdvancedBusy,setBatchAdvancedBusy] = useState(false);
+  const [scanSummary,setScanSummary] = useState<{total:number;checked:number;errors:number;rescued:number}|null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [notice, setNotice] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{title:string;message:string;type:'success'|'warning'} | null>(null);
@@ -424,6 +425,7 @@ const App = () => {
     setVisibleCount(PAGE_SIZE);
     setApiError(null);
     setNotice(null);
+    setScanSummary(null);
 
     /* 清掉上一輪的縮圖 URL */
     results.forEach((r) => {
@@ -435,6 +437,7 @@ const App = () => {
     const sigs: (Uint8ClampedArray | null)[] = new Array(files.length).fill(null);
     const embeddings: (Float32Array | null)[] = new Array(files.length).fill(null);
     const patches:(Float32Array|null)[] = new Array(files.length).fill(null);
+    const hashes:(string|null)[]=new Array(files.length).fill(null);
 
     const client = getDinoClient();
 
@@ -458,6 +461,7 @@ const App = () => {
 
         /* 位元組完全相同 → 直接沿用先前算好的結果（省下整次推論） */
         const hash = await contentHash(file);
+        hashes[i]=hash;
         const twin = hash ? hashToIndex.get(hash) : undefined;
         if (twin !== undefined) {
           sigs[i] = sigs[twin];
@@ -523,7 +527,23 @@ const App = () => {
         if(i%12===0){setProgress({stage:'建立跨版本共同視覺特徵',done:i+1,total:files.length});await sleep(0)}
       }
 
-      /* 4) 交叉比對（向量內積，瞬間完成） */
+      /* Full forensic pass: prepare local features once for every photo,
+         before evaluating ALL cross-folder pairs (even those below threshold). */
+      const prepared:(PreparedAdvanced|null)[]=new Array(files.length).fill(null);
+      const preparedByHash=new Map<string,PreparedAdvanced>();
+      let prepareFailures=0;
+      for(let i=0;i<files.length;i++){
+        if(stopRef.current)return;
+        setProgress({stage:'完整辨識 ①/②：逐張擷取 FAST／BRIEF '+(i+1)+' / '+files.length,done:i,total:files.length});
+        const hash=hashes[i];
+        if(hash&&preparedByHash.has(hash)){prepared[i]=preparedByHash.get(hash)!}
+        else try{
+          prepared[i]=await prepareAdvanced(files[i]);
+          if(hash)preparedByHash.set(hash,prepared[i]!);
+        }catch(error){prepareFailures++;console.warn('特徵點擷取失敗',files[i].name,error)}
+        if(i%3===0)await sleep(0);
+      }
+      /* 4) All-pair DINO, common visual score and full geometric verification. */
       setProgress({ stage: '交叉比對中…', done: files.length, total: files.length });
 
       const byFolder = new Map<number, Set<number>>();
@@ -540,7 +560,7 @@ const App = () => {
 
       const folderIds = [...byFolder.keys()];
       const matches: MatchItem[] = [];
-      let tick = 0;
+      let tick = 0,geometryErrors=0,geometryRescued=0,geometryChecked=0;
 
       for (let a = 0; a < folderIds.length; a++) {
         for (let b = a + 1; b < folderIds.length; b++) {
