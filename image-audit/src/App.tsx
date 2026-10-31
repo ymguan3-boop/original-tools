@@ -893,6 +893,29 @@ ${scoreInfo}
     notify('差異說明已完成', 'AI 撰寫 '+aiDone+' 組、規則判定 '+ruleDone+' 組'+(failed ? '、失敗 '+failed+' 組' : '')+'。');
   };
 
+  /* Run slower geometry only for the pair a reviewer opens. */
+  const runAdvanced=async(item:MatchItem)=>{
+    if(advancedBusy)return;
+    setAdvancedBusy(true);
+    try{
+      const [ha,hb]=await Promise.all([contentHash(item.fileA),contentHash(item.fileB)]);
+      let advanced:AdvancedResult;
+      if(ha&&hb&&ha===hb){
+        advanced={status:'byte-identical',label:'檔案位元組完全相同',matches:0,inliers:0,
+          inlierRatio:100,coverage:100,alignedSSIM:100,differenceArea:0,heatmap:null,
+          patchSimilarity:item.patchSimilarity??null,
+          note:'SHA-256 完全一致可確認檔案內容相同；是否構成重複計價仍須另行查證。'};
+      }else{
+        advanced=await advancedCompare(item.fileA,item.fileB);
+        advanced.patchSimilarity=item.patchSimilarity??null;
+      }
+      const updated={...item,advanced};
+      setResults(prev=>prev.map(r=>r.id===item.id?updated:r));
+      setSelectedResult(prev=>prev?.id===item.id?updated:prev);
+    }catch(e){notify('進階驗證未完成',e instanceof Error?e.message:String(e),'warning')}
+    finally{setAdvancedBusy(false)}
+  };
+
   /* ---------------------- 匯出真正的 DOCX (OOXML) ---------------------- */
   const exportToWord = async () => {
     if (!results.length) { notify('沒有可匯出的照片', '請先完成跨資料夾照片比對。', 'warning'); return; }
@@ -913,11 +936,11 @@ ${scoreInfo}
         reportRows.push({
           score:primaryScore(item),
           label:'跨版本共用視覺相似度',
-          detail:'DINOv2 特徵餘弦：'+(item.dino===null?'未取得':item.dino.toFixed(1)+'%')+'｜pHash '+item.visual.hash.toFixed(1)+'%｜位置校正 '+item.visual.registered.toFixed(1)+'%｜64×64 像素 '+item.pixel.toFixed(2)+'%',
+          detail:'DINOv2 特徵餘弦：'+(item.dino===null?'未取得':item.dino.toFixed(1)+'%')+'｜局部 Patch '+(item.patchSimilarity==null?'未支援':item.patchSimilarity.toFixed(1)+'%')+'｜pHash '+item.visual.hash.toFixed(1)+'%｜位置校正 '+item.visual.registered.toFixed(1)+'%｜64×64 像素 '+item.pixel.toFixed(2)+'%',
           sourceA:item.sourceA,sourceB:item.sourceB,
           filenameA:item.fileA.name,filenameB:item.fileB.name,
           imageA,imageB,
-          analysis:item.analysis||buildRuleText(item),
+          analysis:(item.analysis||buildRuleText(item))+(item.advanced&&!(item.analysis||'').includes('進階查核')?'\n【進階局部驗證】'+advancedSummary(item.advanced):''),
           analysisSource:item.analysisSource==='ai'?'AI 分析':'規則判定'
         });
       }
@@ -1010,6 +1033,21 @@ ${scoreInfo}
               </div>
             )}
           </div>
+
+          <details className="rounded-xl border border-blue-100 bg-white p-4 text-sm leading-7">
+            <summary className="font-bold text-blue-800 cursor-pointer">辨識參數說明｜快速共用評分與桌面版精準查核（點此展開）</summary>
+            <div className="mt-3 grid md:grid-cols-2 gap-3 text-xs text-slate-700">
+              <p><b>共同視覺分數：</b>網頁與桌面版以 pHash / dHash、明暗結構、邊緣、色彩、像素及位置校正綜合篩選；相同門檻可比較，但分數不是違規機率。</p>
+              <p><b>DINOv2-small CLS：</b>384 維特徵餘弦相似度，辨識場景的語意接近程度；不納入跨版本共同門檻。</p>
+              <p><b>DINOv2 局部 Patch：</b>模型若回傳局部 tokens，才彙整成 4×4 區域特徵作為補充證據；不支援時不虛構數值。</p>
+              <p><b>FAST / 方向 BRIEF：</b>提取局部角點及描述子，比對裁切、縮放及旋轉後可能對應的畫面部位；非完整 OpenCV ORB。</p>
+              <p><b>RANSAC：</b>以旋轉、縮放、位移相似變換檢查匹配點的幾何一致性，統計內點數、比例及覆蓋率；不等同透視 Homography。</p>
+              <p><b>對齊 SSIM：</b>以 8×8 區塊衡量結構一致性，配合紅色差異熱區輔助人工檢視；光照與畫面遮蔽會影響數值。</p>
+              <p><b>SHA-256：</b>確定兩個檔案位元組是否完全相同；重壓縮、裁切後的照片通常不同。</p>
+              <p><b>MobileSAM / YOLO：</b>未預載，避免體積及速度負擔；未來有指定物件分割需求再評估選配。</p>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">進階驗證僅對點選的組別執行，不改動全批次排序、分數或快速篩選。仍須人工查核原始照片、施工日誌、拍攝時間與驗收資料。</p>
+          </details>
 
           {/* 引擎二：OpenRouter 文字說明（選配） */}
           <div className="flex flex-col lg:flex-row gap-3 lg:items-center bg-indigo-50/60 border border-indigo-100 rounded-lg p-3">
@@ -1467,6 +1505,20 @@ ${scoreInfo}
                   <div>A：{selectedResult.sourceA} / {selectedResult.fileA.name}</div>
                   <div>B：{selectedResult.sourceB} / {selectedResult.fileB.name}</div>
                 </div>
+                <button type="button" disabled={advancedBusy} onClick={()=>{void runAdvanced(selectedResult);}}
+                  className="w-full rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white font-semibold text-sm py-2 mb-3">
+                  {advancedBusy?'本機局部驗證中…':selectedResult.advanced?'重新進階查核':'進階驗證：局部特徵＋RANSAC＋SSIM'}
+                </button>
+                {selectedResult.advanced&&(
+                  <section className="rounded-lg border border-amber-200 bg-amber-50 p-3 mb-3 text-xs text-amber-950 space-y-1">
+                    <strong className="block text-sm">{selectedResult.advanced.label}</strong>
+                    <p>特徵匹配 {selectedResult.advanced.matches} 點；幾何內點 {selectedResult.advanced.inliers} 點（{selectedResult.advanced.inlierRatio}%）；覆蓋 {selectedResult.advanced.coverage}%</p>
+                    <p>對齊 SSIM：{selectedResult.advanced.alignedSSIM??'資料不足'}%｜差異區域：{selectedResult.advanced.differenceArea??'資料不足'}%</p>
+                    <p>DINOv2 局部 Patch：{selectedResult.advanced.patchSimilarity==null?'模型未回傳局部特徵':selectedResult.advanced.patchSimilarity+'%'}</p>
+                    {selectedResult.advanced.heatmap&&<img src={selectedResult.advanced.heatmap} alt="對齊後差異熱區，紅色代表視覺差異" className="w-full rounded border border-amber-200 mt-2"/>}
+                    <p className="leading-relaxed">{selectedResult.advanced.note}</p>
+                  </section>
+                )}
                 {selectedResult.analysis ? (
                   <div className="bg-slate-50 p-4 rounded text-sm leading-relaxed whitespace-pre-line text-slate-700">
                     {selectedResult.analysis}
