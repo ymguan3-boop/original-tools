@@ -1,0 +1,22 @@
+工程照片 AI 交叉稽核系統｜Windows DINOv2 桌面版
+
+使用步驟：
+1. 將 ZIP 完整解壓縮（請勿直接在壓縮檔裡開啟 EXE）。
+2. 雙擊「啟動工程照片稽核.exe」。
+3. 會自動開啟 Chrome / Edge 預設瀏覽器，網址為 http://127.0.0.1:隨機連接埠/。
+4. 分別匯入不同工程照片資料夾，開始 DINOv2 比對，完成後可產出查核說明與 Word 報告。
+5. 使用期間保持啟動程式的視窗開啟；關閉視窗即停止服務。
+
+DINOv2 特徵模型及所需 WebAssembly 由本壓縮檔提供，本機推論不用連外。
+本版不需另行安裝 Python、Node.js 或本機伺服器。
+如 Windows SmartScreen 提示不明的程式：此為 GitHub Actions 編譯的未簽章開源工具，請先核對下載來源與檔案內容，再決定是否執行。
+AI 文字說明（OpenRouter）仍是選配；使用時需連網及自行輸入金鑰，縮圖可能傳到第三方，請依資訊安全規範判斷是否允許。
+相似度只能供審計風險初篩，不能單獨當作重複請款證據。
+
+重要技術說明：
+Chrome、Edge 的 file:// 安全限制不允許將完整 DINOv2 + Worker + ONNX/WASM 可靠地直接當作本機 HTML 執行，因此此「含模型的桌面版」必須雙擊 EXE 啟動 localhost，再由瀏覽器操作。
+若希望「直接雙擊 HTML」，請使用另提供的基本離線 HTML 版，但該版本沒有 DINOv2。
+軟體不向外網開放服務：僅綁定 127.0.0.1 本機介面。
+
+專案：https://github.com/ymguan3-boop/original-tools
+創作人：官毅明
