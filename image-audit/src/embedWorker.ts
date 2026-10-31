@@ -73,7 +73,7 @@ function loadExtractor(): Promise<unknown> {
 /**
  * 單張推論：回傳正規化後的 CLS 向量（逐張推論，結果完全可重現）
  */
-async function embedOne(extractor: unknown, image: RawImage): Promise<Float32Array> {
+async function embedOne(extractor: unknown, image: RawImage): Promise<{embedding:Float32Array;patch:Float32Array|null}> {
   const out = (await (extractor as (x: unknown) => Promise<AnyRecord>)([image])) as {
     data: Float32Array;
     dims: number[];
@@ -92,7 +92,29 @@ async function embedOne(extractor: unknown, image: RawImage): Promise<Float32Arr
   }
   norm = Math.sqrt(norm) || 1;
   for (let i = 0; i < hidden; i++) vec[i] /= norm;
-  return vec;
+  // Optional local DINO patch descriptors. Pooled-only output leaves patch null.
+  let patch:Float32Array|null=null;
+  if(dims.length>=3 && dims[dims.length-2]>1 && hidden>0){
+    const tokens=dims[dims.length-2]-1,side=Math.round(Math.sqrt(tokens));
+    if(side*side===tokens && out.data.length>=(tokens+1)*hidden){
+      const pooled=new Float32Array(16*hidden);
+      const counts=new Uint16Array(16);
+      for(let k=0;k<tokens;k++){
+        const py=Math.min(3,Math.floor(Math.floor(k/side)*4/side));
+        const px=Math.min(3,Math.floor((k%side)*4/side));
+        const index=py*4+px;counts[index]++;
+        for(let d=0;d<hidden;d++)pooled[index*hidden+d]+=out.data[(k+1)*hidden+d];
+      }
+      for(let i=0;i<16;i++){
+        let len=0;
+        for(let d=0;d<hidden;d++){pooled[i*hidden+d]/=Math.max(1,counts[i]);len+=pooled[i*hidden+d]**2}
+        const norm=Math.sqrt(len)||1;
+        for(let d=0;d<hidden;d++)pooled[i*hidden+d]/=norm;
+      }
+      patch=pooled;
+    }
+  }
+  return {embedding:vec,patch};
 }
 
 /** 一次解碼，同時產出縮圖、64×64 像素特徵與推論用的畫布像素 */
@@ -160,6 +182,7 @@ async function handleAnalyze(batchId: number, items: AnalyzeItem[]): Promise<voi
     thumb: Blob;
     sig: Uint8ClampedArray;
     embedding: Float32Array | null;
+    patch:Float32Array|null;
     width: number;
     height: number;
   }[] = [];
@@ -169,18 +192,20 @@ async function handleAnalyze(batchId: number, items: AnalyzeItem[]): Promise<voi
       const { thumb, sig, pixels, width, height } = await prepareFile(item.file);
 
       let embedding: Float32Array | null = null;
+      let patch:Float32Array|null=null;
       if (extractor) {
         try {
-          embedding = await embedOne(extractor, pixels);
+          const local=await embedOne(extractor, pixels);
+          embedding=local.embedding;patch=local.patch;
         } catch (err) {
           // 推論失敗：整批退回像素比對，避免部分項目有特徵、部分沒有
           modelFailed = true;
           post({ type: 'model-error', message: String((err as Error)?.message ?? err) });
-          for (const r of results) r.embedding = null;
+          for (const r of results){r.embedding = null;r.patch=null;}
         }
       }
 
-      results.push({ id: item.id, thumb, sig, embedding, width, height });
+      results.push({ id: item.id, thumb, sig, embedding, patch, width, height });
     } catch (err) {
       post({ type: 'item-error', id: item.id, message: String((err as Error)?.message ?? err) });
     }
@@ -190,6 +215,7 @@ async function handleAnalyze(batchId: number, items: AnalyzeItem[]): Promise<voi
   for (const r of results) {
     transfer.push(r.sig.buffer as ArrayBuffer);
     if (r.embedding) transfer.push(r.embedding.buffer as ArrayBuffer);
+    if (r.patch) transfer.push(r.patch.buffer as ArrayBuffer);
   }
 
   post({ type: 'batch', batchId, results }, transfer);
