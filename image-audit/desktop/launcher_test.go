@@ -11,13 +11,13 @@ import (
 
 func TestDesktopLauncherNoRedirect(t *testing.T) {
  root := t.TempDir()
- for _,name := range []string{"index.html","docxWriter.js","docx-export.js","comparator-core.js","report-standard.js","assets/main.js","models/Xenova/dinov2-small/onnx/model_quantized.onnx"} {
+ for _,name := range []string{"index.html","docxWriter.js","docx-export.js","comparator-core.js","report-standard.js","multi-folder-import.js","assets/main.js","models/Xenova/dinov2-small/onnx/model_quantized.onnx"} {
    path := filepath.Join(root,filepath.FromSlash(name))
    if err:=os.MkdirAll(filepath.Dir(path),0755);err!=nil {t.Fatal(err)}
    if err:=os.WriteFile(path,[]byte("sample"),0644);err!=nil {t.Fatal(err)}
  }
  handler:=newHandler(root)
- for _,path := range []string{"/","/index.html","/docxWriter.js","/docx-export.js","/comparator-core.js","/report-standard.js","/assets/main.js","/models/Xenova/dinov2-small/onnx/model_quantized.onnx"} {
+ for _,path := range []string{"/","/index.html","/docxWriter.js","/docx-export.js","/comparator-core.js","/report-standard.js","/multi-folder-import.js","/assets/main.js","/models/Xenova/dinov2-small/onnx/model_quantized.onnx"} {
    r := httptest.NewRequest(http.MethodGet,path,nil)
    w := httptest.NewRecorder()
    handler.ServeHTTP(w,r)
