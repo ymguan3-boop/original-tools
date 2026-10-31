@@ -40,12 +40,12 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
 <body><main class="wrap">
 <a class="back" href="../">← 返回原創工具集</a>
 <h1>工程照片 AI 交叉稽核系統</h1>
-<p class="sub">請選擇適合您的使用方式。兩版都能交叉比對工程照片、產生差異說明及匯出 DOCX；採用不同的影像分析引擎。</p>
+<p class="sub">請選擇適合您的使用方式。兩版均使用相同的共同視覺分數進行初篩與排序；桌面版另提供 DINOv2 及指定組別的局部特徵進階查核，均可匯出 DOCX。</p>
 <div class="grid">
 <section class="card">
 <div class="symbol" aria-hidden="true">⬇</div><h2>下載桌面版</h2>
-<span class="tag">DINOv2 語意相似度 · 本機推論</span>
-<small>適合需要進一步辨識裁切、重新壓縮、調色等相似照片的審計工作。下載前可先閱讀下方的安裝及操作說明。</small>
+<span class="tag">DINOv2 + RANSAC + SSIM · 本機進階查核</span>
+<small>適合需針對疑似重複照片進行局部特徵匹配、幾何一致性、對齊 SSIM 與差異熱區查核；僅對點選的對照組執行進階驗證，保留全批次快速篩選速度。</small>
 <ul><li>Windows ZIP，內含 DINOv2 模型與執行檔。</li><li>解壓後雙擊「啟動工程照片稽核.exe」，自動開啟瀏覽器。</li><li>免安裝 Python / Node.js；影像推論不需網路。</li><li>需保留啟動程式視窗，並留意 Windows 未簽章程式提示。</li><li><strong>ZIP 中的 index.html 是介面核心檔案，請勿刪除。</strong></li></ul>
 <a class="btn" download="image-audit-desktop-dinov2.zip" href="./image-audit-desktop-dinov2.zip">下載 DINOv2 桌面版 ZIP</a><a class="guide-link" href="#desktop-guide">查看完整安裝與操作說明 ↓</a>
 </section>
@@ -53,7 +53,7 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
 <div class="symbol" aria-hidden="true">🌐</div><h2>使用線上版</h2>
 <span class="tag">像素＋感知雜湊 · 不使用 DINOv2</span>
 <small>適合不想安裝程式、希望立即進行照片相似度初篩的使用者。</small>
-<ul><li>透過瀏覽器開啟，不需下載或安裝。</li><li>以像素、感知雜湊及色彩特徵進行快速初篩。</li><li>支援多資料夾交叉比對、差異說明、DOCX / CSV 匯出。</li><li>照片在瀏覽器處理；可選擇使用需連網的 AI 文字解說。</li></ul>
+<ul><li>透過瀏覽器開啟，不需下載或安裝。</li><li>使用共同視覺分數（pHash、dHash、明暗結構、邊緣及位移校正），不載入大型 AI 模型。</li><li>支援多資料夾交叉比對、差異說明、DOCX / CSV 匯出。</li><li>照片在瀏覽器處理；可選擇使用需連網的 AI 文字解說。</li></ul>
 <a class="btn" href="./">開啟線上版</a>
 </section>
 </div>
@@ -63,10 +63,15 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
 <div class="steps">
  <article class="step"><h3>下載並完整解壓縮</h3><p>點選上方「下載 DINOv2 桌面版 ZIP」，在檔案總管對 ZIP 按右鍵，選擇「解壓縮全部」。<strong>不要直接在 ZIP 內執行 EXE</strong>，也不要將 EXE 單獨移出資料夾。</p></article>
  <article class="step"><h3>雙擊啟動程式</h3><p>開啟解壓縮後的資料夾，雙擊 <code>啟動工程照片稽核.exe</code>。程式會啟動本機服務，並自動開啟預設瀏覽器（建議 Chrome 或 Edge）。</p></article>
- <article class="step"><h3>匯入照片並分析</h3><p>在網頁介面加入<strong>至少兩個</strong>工程照片資料夾，按「開始分析」，檢視 DINOv2 相似度、雙圖對照與差異說明。進行人工篩選後可匯出 <code>.docx</code> 查核報告。</p></article>
+ <article class="step"><h3>匯入照片並分析</h3><p>在網頁介面加入<strong>至少兩個</strong>工程照片資料夾，按「開始分析」，先檢視與網頁版相同的共同視覺分數，再點選疑似照片組別執行局部特徵幾何驗證與 SSIM，並查看 DINOv2 輔助特徵與差異熱區。進行人工篩選後可匯出 <code>.docx</code> 查核報告。</p></article>
  <article class="step"><h3>使用完畢再關閉</h3><p>使用期間<strong>請保持 EXE 啟動後的命令視窗開啟</strong>；關閉視窗就會停止本機網頁服務。要再次使用時，只需重新雙擊 EXE。</p></article>
 </div>
 <div class="guide-note"><strong>檔案保留提醒：</strong> ZIP 中的 <code>index.html</code> 是瀏覽器介面本體，不是多餘檔案。<code>assets/</code>、<code>models/</code>、<code>docxWriter.js</code> 等亦為程式資源。請保留解壓縮後的完整資料夾；操作說明已集中在本網頁，ZIP 不必再附獨立的 TXT 說明檔。</div>
+<h3 class="subhead">兩版的辨識參數及適用範圍</h3>
+<div class="steps">
+ <article class="step"><h3>網頁版｜快速篩選</h3><p>pHash（感知雜湊）、dHash（亮暗差異）、明暗結構、邊緣一致性、像素差異、色彩分布、全圖／中心裁切及位置校正。優先追求速度與一致的共同視覺門檻；不加入 DINOv2、MobileSAM、YOLO。</p></article>
+ <article class="step"><h3>桌面版｜指定組別精查</h3><p>保留網頁版共同視覺分數，另有 DINOv2 384 維特徵及可用時的 Patch 特徵。點選對照組才執行 FAST / 方向 BRIEF、幾何 RANSAC、對齊 SSIM 與差異熱區；輸出內點數、覆蓋率等可複核指標。</p></article>
+</div><div class="guide-note">此版未整合完整 OpenCV ORB / Homography，也未打包 MobileSAM 或 YOLO 模型；幾何驗證使用本機輕量 FAST / 方向 BRIEF 與相似變換 RANSAC。各項指標都不代表「重複請款機率」，須搭配原始照片及工程資料進一步查證。更多參數用途可於兩版的「辨識參數說明」展開檢視。</div>
 <h3 class="subhead">常見問題與資訊安全提醒</h3>
 <div class="faq">
  <details><summary>為什麼雙擊 EXE 後會開啟瀏覽器？可以刪掉 HTML 嗎？</summary><p>EXE 只負責在自己的電腦啟動本機 HTTP 服務（<code>127.0.0.1</code> 隨機連接埠）；真正的操作畫面由 <code>index.html</code> 和其他資源提供。因此 HTML 必須保留，不能單獨刪除。</p></details>
@@ -76,6 +81,6 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
  <details><summary>相似度高是否代表施工照片重複請款？</summary><p>不是。相似度只表示視覺特徵接近，不能直接推論違規或重複請款。仍應比對照片時間、施工日誌、工項數量、契約及驗收資料。</p></details>
 </div>
 </section>
-<div class="notice"><strong>注意：</strong>真正包含 DINOv2 的桌面版不能可靠地直接雙擊 <code>file://</code> HTML 啟動模型，因此採用「雙擊 EXE → 啟動僅供本機存取的網頁」方式。兩版分數採用不同演算法，不宜直接比較；任何相似結果都應人工查核。</div>
+<div class="notice"><strong>注意：</strong>真正包含 DINOv2 的桌面版不能可靠地直接雙擊 <code>file://</code> HTML 啟動模型，因此採用「雙擊 EXE → 啟動僅供本機存取的網頁」方式。兩版共同視覺分數採同一套初篩演算法，可使用同一門檻比較；桌面版的 DINOv2 與進階幾何證據為額外資訊，不得混為相同指標；任何相似結果都應人工查核。</div>
 <footer>創作人 官毅明 · original-tools · <a href="https://github.com/ymguan3-boop/original-tools">GitHub 原始碼</a></footer>
 </main></body></html>
