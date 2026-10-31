@@ -167,11 +167,11 @@ async function feature(f){
   // exactly as the Windows DINOv2 edition does. The lossy 390px JPEG
   // thumbnail is for display only and must NEVER feed score calculations.
   const bitmap=await createImageBitmap(f);
-  let full,center;
-  try{full=sample(bitmap);center=sample(bitmap,true)}
+  let full,center,extra={};
+  try{({full,center,...extra}=window.ImageAuditComparator.prepare(bitmap))}
   finally{bitmap.close()}
   const {url}=await imgData(f);
-  return {file:f,thumb:url,full,center};
+  return {file:f,thumb:url,full,center,...extra};
 }
 function progress(n,total,stage){$('progressWrap').classList.remove('hidden');$('progressBar').style.width=(total?100*n/total:0).toFixed(1)+'%';$('progressText').textContent=stage+'：'+n+' / '+total}
 function lock(busy){S.busy=busy;for(const id of ['run','clearFolders','addFolder','addManyFolders','addFiles','aiRun'])$(id).disabled=busy;$('stop').disabled=!busy}
