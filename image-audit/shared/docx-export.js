@@ -30,7 +30,7 @@ function zip(entries){
  const end=join([u32(0x06054b50),u16(0),u16(0),u16(entries.length),u16(entries.length),u32(cd.length),u32(offset),u16(0)]);
  return new Blob([...locals,cd,end],{type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
 }
-function run(t,bold=false,color="202C40"){return '<w:r><w:rPr>'+(bold?'<w:b/>':'')+'<w:rFonts w:eastAsia="Microsoft JhengHei" w:ascii="Arial"/><w:color w:val="'+color+'"/><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">'+esc(t)+'</w:t></w:r>'}
+function run(t,bold=false,color="202C40",size=20){return '<w:r><w:rPr>'+(bold?'<w:b/>':'')+'<w:rFonts w:eastAsia="Microsoft JhengHei" w:ascii="Arial"/><w:color w:val="'+color+'"/><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">'+esc(t)+'</w:t></w:r>'}
 function p(text,opts={}){
  const lines=String(text==null?"":text).split(/\r?\n/);
  const style=opts.style?'<w:pStyle w:val="'+opts.style+'"/>':'';
@@ -38,7 +38,7 @@ function p(text,opts={}){
  const keep=opts.keep?'<w:keepNext/>':'';
  const center=opts.center?'<w:jc w:val="center"/>':'';
  const page=opts.page?'<w:pageBreakBefore/>':'';
- return '<w:p><w:pPr>'+style+spacing+keep+center+page+'</w:pPr>'+lines.map((v,i)=>(i?'<w:r><w:br/></w:r>':'')+run(v,!!opts.bold,opts.color||"202C40")).join('')+'</w:p>';
+ return '<w:p><w:pPr>'+style+spacing+keep+center+page+'</w:pPr>'+lines.map((v,i)=>(i?'<w:r><w:br/></w:r>':'')+run(v,!!opts.bold,opts.color||"202C40",opts.style==="Title"?34:(opts.bold?23:20))).join('')+'</w:p>';
 }
 function drawing(relId,id){
  const w=2520000,h=1680000;
