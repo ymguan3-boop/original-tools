@@ -1,0 +1,23 @@
+工程照片交叉稽核系統｜桌面 HTML 離線版
+
+使用方式
+1. 將 ZIP 完整解壓縮到任意資料夾。
+2. 直接雙擊「工程照片交叉稽核系統.html」，以 Chrome 或 Edge 開啟。
+3. 依序匯入至少兩個照片資料夾，按「開始交叉比對」。
+4. 檢視差異說明，匯出 Word（.doc）或 CSV。
+
+不需要安裝 Python、Node.js 或啟動伺服器。基本照片分析不需網路或 API Key。
+
+功能與限制
+- file:// 離線 HTML 版採「像素、感知雜湊、色彩特徵」初篩。
+- 原線上版採 DINOv2 模型，因此兩者分數不可混用。
+- 圖片只在使用者電腦上處理，只有主動使用 OpenRouter 線上 AI，並勾選同意時，才會將縮圖送往服務商。
+- 本機 HTML 可能受第三方 API 的 CORS 跨來源限制；純離線分析及規則說明不受影響。
+- 結果僅供查核線索，不能直接認定重複請款。
+- 支援的照片格式以瀏覽器可解碼格式為準，建議 JPG/PNG。
+- Word 格式為 Word 可讀的 HTML .doc，而非 DOCX。
+- 建議使用 Windows 10/11 的 Chrome 或 Edge。
+
+線上版：https://ymguan3-boop.github.io/original-tools/image-audit/
+專案：https://github.com/ymguan3-boop/original-tools
+創作人：官毅明
