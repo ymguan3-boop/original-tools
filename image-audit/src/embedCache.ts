@@ -17,6 +17,7 @@ export interface CachedEmbed {
   hash: string;
   sig: Uint8ClampedArray;
   embedding: Float32Array;
+  patch?: Float32Array | null;
   thumb: Blob;
   createdAt: number;
 }
