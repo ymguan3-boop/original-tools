@@ -58,7 +58,6 @@ dialog.audit-dialog::backdrop{background:rgba(16,32,55,.45);backdrop-filter:blur
   <button id="noticeDismiss" type="button">確定</button></div>
 </dialog>
 <script src="./docxWriter.js"></script>
-<script src="./docx-export.js"></script>
 <script src="./comparator-core.js"></script>
 <script src="./report-standard.js"></script>
 <script>
@@ -246,7 +245,7 @@ function reportContext(m,reason){
    registered:m.registered,pix:m.pix,col:m.col,strongEvidence:m.strongEvidence,reason};
 }
 function ruleReport(m,reason){return report.formatRule(reportContext(m,reason))}
-function reportText(m){return m.analysis||ruleReport(m)}
+function reportText(m){if(!m.analysis){m.analysis=ruleReport(m);m.source='rule'}return m.analysis}
 $('notes').onclick=()=>{
  for(const m of S.results){m.analysis=ruleReport(m);m.source='rule'}
  drawResults();message('已產生 '+S.results.length+' 組一致化規則查核說明。');
@@ -305,26 +304,32 @@ function dateTag(){return new Date().toISOString().slice(0,10)}
 $('csv').onclick=()=>{const rows=visible();if(!rows.length){message('目前沒有符合門檻的結果可匯出。');return}const quote=s=>'"'+String(s??'').replace(/"/g,'""')+'"';const data=[['組別 A','檔案 A','組別 B','檔案 B','多特徵相似指標 (%)','pHash (%)','明暗結構 (%)','邊緣一致性 (%)','位置校正 (%)','像素 (%)','色彩 (%)','差異說明','說明來源'],...rows.map(m=>[m.a.folder,m.a.file.name,m.b.folder,m.b.file.name,m.score.toFixed(1),m.hash.toFixed(1),m.structure.toFixed(1),m.edges.toFixed(1),m.registered.toFixed(1),m.pix.toFixed(1),m.col.toFixed(1),reportText(m),m.source||'rule'])];download('工程照片交叉稽核_'+dateTag()+'.csv','\ufeff'+data.map(r=>r.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8');message('已匯出 '+rows.length+' 組 CSV 結果。');modal('CSV 匯出成功','已依相似度排序匯出 '+rows.length+' 組比對結果。')};
 $('word').onclick=async()=>{
  const rows=[...visible()].sort((a,b)=>b.score-a.score);
- if(!rows.length){notify('沒有可匯出的對照組','目前沒有符合列示門檻的結果，請先完成比對或調整門檻。');return}
- if(!window.ImageAuditDocx){notify('DOCX 模組尚未載入','請重新整理頁面或確認同資料夾內有 docx-export.js。');return}
+ if(!rows.length){notify('沒有可匯出的對照組','請先完成比對或調整篩選門檻。');return}
+ if(!window.ImageAuditDocx?.create){notify('DOCX 模組尚未載入','請確認已載入 docxWriter.js 後重新整理。');return}
  $('word').disabled=true;
- message('正在產製 DOCX，逐一嵌入 '+rows.length+' 組對照照片…');
+ message('正在製作 '+rows.length+' 組照片的標準化 DOCX 查核報告…');
  try{
-  const pairs=rows.map(m=>({
-   score:m.score,
-   a:{folder:m.a.folder,name:m.a.file.name,dataUrl:m.a.thumb},
-   b:{folder:m.b.folder,name:m.b.file.name,dataUrl:m.b.thumb},
-   metrics:'pHash '+m.hash.toFixed(1)+'%｜明暗結構 '+m.structure.toFixed(1)+'%｜邊緣一致性 '+m.edges.toFixed(1)+'%｜位置校正 '+m.registered.toFixed(1)+'%｜像素 '+m.pix.toFixed(1)+'%（輔助）｜色彩 '+m.col.toFixed(1)+'%（輔助）',
-   analysis:reportText(m)
+  const reportRows=rows.map(m=>({
+   score:m.score,label:'跨版本共用視覺相似度',
+   detail:'pHash '+m.hash.toFixed(1)+'%｜明暗結構 '+m.structure.toFixed(1)+'%｜邊緣一致性 '+m.edges.toFixed(1)+'%｜位置校正 '+m.registered.toFixed(1)+'%｜像素 '+m.pix.toFixed(1)+'%（輔助）｜色彩 '+m.col.toFixed(1)+'%（輔助）',
+   sourceA:m.a.folder,sourceB:m.b.folder,
+   filenameA:m.a.file.name,filenameB:m.b.file.name,
+   imageA:m.a.thumb,imageB:m.b.thumb,
+   analysis:reportText(m),
+   analysisSource:m.source==='ai'?'OpenRouter AI':'本機規則模板'
   }));
-  await window.ImageAuditDocx.save({
-   filename:'工程照片交叉稽核報告_'+dateTag()+'.docx',
-   pairs,photoCount:S.items.length,totalPairs:S.allPairs,threshold:$('threshold').value,
-   engine:'pHash/dHash、明暗結構與邊緣一致性（非 DINOv2）'
+  // Both Windows DINOv2 and this HTML edition use the very same DOCX layout engine.
+  const blob=await window.ImageAuditDocx.create({
+   title:'工程照片完整查核報告',
+   engine:'共用視覺比對 V2.2（pHash / dHash、結構、邊緣、位置校正）',
+   rows:reportRows
   });
-  message('已匯出 '+rows.length+' 組完整 DOCX 查核報告（含雙圖與說明）。');
-  notify('DOCX 查核報告已完成','已依相似度由高到低匯出 '+rows.length+' 組雙圖對照，所有照片統一尺寸並保留原始比例。');
- }catch(err){console.error(err);message('DOCX 匯出失敗：'+err.message);notify('DOCX 匯出失敗',String(err.message||err))}
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='工程照片完整查核報告_'+dateTag()+'.docx';
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+  message('已匯出 '+rows.length+' 組標準化 DOCX（雙圖、指標、六段式查核分析）。');
+  notify('DOCX 查核報告完成','已使用與 DINOv2 桌面版相同的 Word 排版，依相似度由高至低列示 '+rows.length+' 組。');
+ }catch(e){console.error(e);message('DOCX 匯出失敗：'+e.message);notify('DOCX 匯出失敗',String(e.message||e))}
  finally{$('word').disabled=false}
 };
 $('env').textContent=location.protocol==='file:'?'已由本機 HTML 啟動（file://）' :'線上輕量版（瀏覽器本機分析）';
