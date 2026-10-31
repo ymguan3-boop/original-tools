@@ -581,14 +581,47 @@ const App = () => {
               if(!va||!vb)continue;
               const visual=common.compare(va,vb);
               const score=visual.score;
-              if(score<listThreshold)continue;
-              // Compute local DINO token comparison only for selected screening candidates.
+              let advanced:AdvancedResult;
+              try{
+                if(hashes[fa]&&hashes[fa]===hashes[fb]){
+                  advanced={status:'byte-identical',label:'SHA-256 確認檔案位元組完全相同',
+                    matches:0,inliers:0,inlierRatio:100,coverage:100,alignedSSIM:100,
+                    differenceArea:0,heatmap:null,note:'檔案內容完全相同；是否有違規計價仍須人工查證。'};
+                }else if(prepared[fa]&&prepared[fb]){
+                  advanced=comparePrepared(prepared[fa]!,prepared[fb]!,false);
+                  geometryChecked++;
+                }else{
+                  geometryErrors++;
+                  advanced={status:'inconclusive',label:'特徵點預處理未完成',
+                    matches:0,inliers:0,inlierRatio:0,coverage:0,alignedSSIM:null,differenceArea:null,
+                    heatmap:null,note:'本組幾何分析未完成；不能因此排除照片同源。'};
+                }
+              }catch(error){
+                geometryErrors++;
+                advanced={status:'inconclusive',label:'本組進階分析失敗',
+                  matches:0,inliers:0,inlierRatio:0,coverage:0,alignedSSIM:null,differenceArea:null,
+                  heatmap:null,note:'進階查核失敗：'+String(error).slice(0,100)};
+              }
+              const rescued=score<listThreshold&&
+                (advanced.status==='verified'||advanced.status==='byte-identical');
+              if(rescued)geometryRescued++;
+              if(score<listThreshold&&!rescued){
+                if(tick%5===0){setProgress({stage:'完整辨識 ②/②：逐組比對 '+tick+' / '+workload.pairs,done:tick,total:workload.pairs});await sleep(0)}
+                continue;
+              }
               const patchSimilarity=localPatchScore(patches[fa],patches[fb]);
+              advanced.patchSimilarity=patchSimilarity;
+              if(prepared[fa]&&prepared[fb]&&advanced.status==='verified'){
+                // Heatmap is only generated for selected evidence groups.
+                advanced.heatmap=comparePrepared(prepared[fa]!,prepared[fb]!,true).heatmap;
+              }
 
               matches.push({
                 id: `${folderIds[a]}-${folderIds[b]}-${fa}-${fb}`,
                 score,
                 visual,
+                advanced,
+                geometryRescued:rescued,
                 patchSimilarity,
                 dino,
                 pixel,
@@ -604,11 +637,11 @@ const App = () => {
             }
           }
 
-          if (tick % 3000 < listB.length) await sleep(0);
+          if(tick%5===0){setProgress({stage:'完整辨識 ②/②：逐組比對 '+tick+' / '+workload.pairs,done:tick,total:workload.pairs});await sleep(0)}
         }
       }
 
-      matches.sort((x, y) => primaryScore(y) - primaryScore(x));
+      matches.sort((x,y)=>Number(y.advanced?.status==='byte-identical')-Number(x.advanced?.status==='byte-identical')||Number(y.advanced?.status==='verified')-Number(x.advanced?.status==='verified')||primaryScore(y)-primaryScore(x));
       const capped = matches.slice(0, MAX_RESULTS);
 
       if (matches.length > MAX_RESULTS) {
@@ -622,7 +655,8 @@ const App = () => {
       }
 
       setResults(capped);
-      setProgress({ stage: '完成', done: files.length, total: files.length });
+      setScanSummary({total:tick,checked:geometryChecked,errors:geometryErrors+prepareFailures,rescued:geometryRescued});
+      setProgress({stage:'全部跨組照片辨識完成',done:tick,total:tick});
 
       notify('照片交叉比對完成',
           '本次照片 '+files.length+' 張、跨資料夾配對 '+workload.pairs.toLocaleString()+' 組\n'+
