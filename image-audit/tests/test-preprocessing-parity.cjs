@@ -34,7 +34,7 @@ async function verify(page){
  assert.ok(desktop.includes('geometryRescued'),'geometry-assisted recall not implemented');
  assert.ok(!desktop.includes('ADVANCED_BATCH_LIMIT'),'must remove 20-pair-only analysis limit');
  assert.ok(desktop.includes('if(score<listThreshold&&!rescued)'),'threshold incorrectly applied before all-pair geometry');
- assert.ok(desktop.includes('FAST / BRIEF'), 'export report lacks model-independent geometry explanation');
+ assert.ok(desktop.includes('FAST／BRIEF')||desktop.includes('FAST / BRIEF'), 'export report lacks model-independent geometry explanation');
  const selector=fs.readFileSync(path.join(root,'selector.html'),'utf8');
  assert.ok(selector.includes('下載桌面版 v2.4.0'),'download version stale');
  assert.ok(selector.includes('匯出 DOCX'),'download instructions do not mention auto verification');
