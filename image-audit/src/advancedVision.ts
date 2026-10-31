@@ -124,7 +124,7 @@ async function decode(file:File):Promise<Frame>{
   const c=canvas.getContext('2d',{willReadFrequently:true});if(!c)throw new Error('無法建立本機影像畫布');
   c.fillStyle='#7f7f7f';c.fillRect(0,0,WIDTH,HEIGHT);
   // Prefer the exact same conservative white-margin detector as the shared web comparator.
-  const bounds=(window as Window & {ImageAuditComparator?:{whiteBounds?:(image:ImageBitmap)=>{x:number;y:number;w:number;h:number}|null}}).ImageAuditComparator?.whiteBounds?.(img);
+  const bounds=typeof window!=='undefined'?(window as Window & {ImageAuditComparator?:{whiteBounds?:(image:ImageBitmap)=>{x:number;y:number;w:number;h:number}|null}}).ImageAuditComparator?.whiteBounds?.(img):null;
   const source=bounds||{x:0,y:0,w:1,h:1};
   const sw=img.width*source.w,sh=img.height*source.h;
   const sc=Math.min(WIDTH/sw,HEIGHT/sh),w=Math.round(sw*sc),h=Math.round(sh*sc);
