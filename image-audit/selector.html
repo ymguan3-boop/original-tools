@@ -59,25 +59,25 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
 </div>
 <section class="guide" id="desktop-guide" aria-labelledby="desktop-guide-title">
 <div class="guide-head"><div class="symbol" aria-hidden="true">📘</div><div><h2 id="desktop-guide-title">Windows 桌面版 v2.4.0｜安裝與操作說明</h2><small>免額外安裝 Python、Node.js 或本機伺服器｜適用 Windows 10 / 11</small></div></div>
-<p class="intro">請重新下載 v2.4.0 ZIP 並完整解壓縮到新資料夾，不要覆蓋或混用舊版。雙擊 EXE 後在預設瀏覽器操作；查看分析結果或匯出 DOCX 時，可使用進階驗證。</p>
+<p class="intro">請重新下載 v2.4.0 ZIP 並完整解壓縮到新資料夾，不要覆蓋或混用舊版。雙擊 EXE 後在瀏覽器操作；按「開始分析」即完整執行全部跨批次配對辨識，匯出 DOCX 不需重新分析。</p>
 <div class="steps">
  <article class="step"><h3>下載並完整解壓縮</h3><p>點選上方「下載 DINOv2 桌面版 ZIP」，在檔案總管右鍵選擇「解壓縮全部」到全新資料夾；避免舊版 JS 與模型檔混用。<strong>不要直接在 ZIP 內執行 EXE</strong>，也不要將 EXE 單獨移出資料夾。</p></article>
  <article class="step"><h3>雙擊啟動程式</h3><p>開啟解壓縮後的資料夾，雙擊 <code>啟動工程照片稽核.exe</code>。程式會啟動本機服務，並自動開啟預設瀏覽器（建議 Chrome 或 Edge）。</p></article>
- <article class="step"><h3>匯入照片並分析</h3><p>在網頁介面點「多個資料夾（連續選取）」，重複按「選取下一個資料夾」挑選不同路徑來源，最後點「完成加入」，也可從檔案總管一次拖入多個資料夾；至少加入<strong>兩個</strong>工程照片資料夾，按「開始分析」，先檢視與網頁版相同的共同視覺分數，再點選疑似照片組別執行「進階驗證：局部特徵＋RANSAC＋SSIM」並查看熱區；。所有辨識已在「開始分析」時完成，按「匯出 DOCX 查核報告」直接寫出各技術及比對結果，並記錄特徵點數、內點比例、SSIM 等結果；全部跨批次照片會先完成各項辨識，再依共同分數或幾何同源線索列示。</p></article>
+ <article class="step"><h3>匯入照片並分析</h3><p>在網頁介面點「多個資料夾（連續選取）」，重複按「選取下一個資料夾」挑選不同路徑來源，最後點「完成加入」，也可從檔案總管一次拖入多個資料夾；至少加入<strong>兩個</strong>工程照片資料夾，按「開始分析」，系統即自動執行全部照片配對的共同視覺、DINOv2、FAST／BRIEF、RANSAC、SSIM 與 SHA-256 判別；分析完成後可點擊照片查看差異熱區。所有辨識已在「開始分析」時完成，按「匯出 DOCX 查核報告」直接寫出各技術及比對結果，並記錄特徵點數、內點比例、SSIM 等結果；全部跨批次照片會先完成各項辨識，再依共同分數或幾何同源線索列示。</p></article>
  <article class="step"><h3>使用完畢再關閉</h3><p>使用期間<strong>請保持 EXE 啟動後的命令視窗開啟</strong>；關閉視窗就會停止本機網頁服務。要再次使用時，只需重新雙擊 EXE。</p></article>
 </div>
 <div class="guide-note"><strong>檔案保留提醒：</strong> ZIP 中的 <code>index.html</code> 是瀏覽器介面本體。<code>assets/</code>、<code>models/</code>、<code>comparator-core.js</code>、<code>docxWriter.js</code> 等都需保留；FAST／BRIEF、RANSAC、SSIM 的程式整合在編譯後的 <code>assets/</code> 內。請保留解壓縮後的完整資料夾；操作說明已集中在本網頁，ZIP 不必再附獨立的 TXT 說明檔。</div>
 <h3 class="subhead">兩版的辨識參數及適用範圍</h3>
 <div class="steps">
  <article class="step"><h3>網頁版｜快速篩選</h3><p>pHash（感知雜湊）、dHash（亮暗差異）、明暗結構、邊緣一致性、像素差異、色彩分布、全圖／中心裁切及位置校正。優先追求速度與一致的共同視覺門檻；不加入 DINOv2、MobileSAM、YOLO。</p></article>
- <article class="step"><h3>桌面版｜指定組別精查</h3><p>保留網頁版共同視覺分數，另有 DINOv2 384 維特徵及可用時的 Patch 特徵。可點選單組執行 FAST／方向 BRIEF、相似變換 RANSAC、對齊 SSIM 與差異熱區，或以「進階批次查核」處理全部組別；直接匯出 DOCX 會記載全部已完成的分析配對，附上內點數、覆蓋率及 SSIM，且不改動共同相似度。</p></article>
+ <article class="step"><h3>桌面版｜全部組別自動精查</h3><p>保留網頁版共同視覺分數，另有 DINOv2 384 維特徵及可用時的 Patch 特徵。所有跨批次照片配對會自動執行 FAST／方向 BRIEF、相似變換 RANSAC、對齊 SSIM；低於共同分數門檻但具幾何高度疑似證據者會補列。匯出 DOCX 會記載全部已入選的照片對照組，附上內點數、覆蓋率及 SSIM，且不改動共同相似度。</p></article>
 </div><div class="guide-note">此版未整合完整 OpenCV ORB / Homography，也未打包 MobileSAM 或 YOLO 模型；幾何驗證使用本機輕量 FAST / 方向 BRIEF 與相似變換 RANSAC。各項指標都不代表「重複請款機率」，須搭配原始照片及工程資料進一步查證。更多參數用途可於兩版的「辨識參數說明」展開檢視。</div>
 <h3 class="subhead">v2.4.0｜全照片自動進階查核與報告升級</h3>
 <div class="steps">
  <article class="step"><h3>網頁版／免安裝 HTML 版</h3><p>修復以 390px JPEG 縮圖計算相似度造成的偏差，改由原始照片解碼後取樣。縮圖仍僅用於顯示及報告。保留快速 pHash、dHash、結構、邊緣與位置校正，不加入 DINOv2、SAM、YOLO。</p></article>
- <article class="step"><h3>Windows DINOv2 桌面版</h3><p>保留 DINOv2-small 及可用時的局部 Patch 特徵；搭配 FAST／方向 BRIEF、RANSAC、SSIM、差異熱區與 SHA-256。同時增加「進階批次查核」與 DOCX 匯出時全部組別自動驗證；不需要 Python 或 Node.js。</p></article>
+ <article class="step"><h3>Windows DINOv2 桌面版</h3><p>保留 DINOv2-small 及可用時的局部 Patch 特徵；搭配 FAST／方向 BRIEF、RANSAC、SSIM、差異熱區與 SHA-256。按「開始分析」即對全部跨批次照片執行進階辨識；DOCX 僅輸出已入選的可疑組別及實際驗證數值；不需要 Python 或 Node.js。</p></article>
 </div>
-<div class="guide-note"><strong>版本確認：</strong>請檢查首頁顯示 <b>v2.4.0</b>，Word 報告「分析引擎」亦應標示 v2.4.0 及本次門檻。若看到 v2.2 或只有 DINOv2 分數，請刪除舊解壓縮資料夾後重新下載；此版本沒有內建 MobileSAM / YOLO，也不是 OpenCV ORB 完整版。照片相似度仍不是違規機率。</div>
+<div class="guide-note"><strong>版本確認：</strong>請檢查首頁顯示 <b>v2.4.0</b>，DOCX 報告「分析引擎」亦應標示 v2.4.0 及本次門檻。若看到 v2.2 或只有 DINOv2 分數，請刪除舊解壓縮資料夾後重新下載；此版本沒有內建 MobileSAM / YOLO，也不是 OpenCV ORB 完整版。照片相似度仍不是違規機率。</div>
 <h3 class="subhead">常見問題與資訊安全提醒</h3>
 <div class="faq">
  <details><summary>為什麼雙擊 EXE 後會開啟瀏覽器？可以刪掉 HTML 嗎？</summary><p>EXE 只負責在自己的電腦啟動本機 HTTP 服務（<code>127.0.0.1</code> 隨機連接埠）；真正的操作畫面由 <code>index.html</code> 和其他資源提供。因此 HTML 必須保留，不能單獨刪除。</p></details>
