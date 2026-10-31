@@ -614,7 +614,9 @@ const App = () => {
               }
               if(prepared[fa]&&prepared[fb]&&advanced.status==='verified'){
                 // Heatmap is only generated for selected evidence groups.
-                advanced.heatmap=comparePrepared(prepared[fa]!,prepared[fb]!,true).heatmap;
+                const diagrams=comparePrepared(prepared[fa]!,prepared[fb]!,true);
+                advanced.heatmap=diagrams.heatmap;
+                advanced.matchImage=diagrams.matchImage;
               }
 
               matches.push({
@@ -960,6 +962,10 @@ const App = () => {
           sourceA:item.sourceA,sourceB:item.sourceB,
           filenameA:item.fileA.name,filenameB:item.fileB.name,
           imageA,imageB,
+          geometryStatus:item.advanced?.status,
+          geometryRescued:item.geometryRescued===true,
+          featureImage:item.advanced?.matchImage??null,
+          evidenceImage:item.advanced?.heatmap??null,
           analysis:item.analysis||buildRuleText(item),
           analysisSource:item.analysisSource==='ai'?'OpenRouter AI':'本機規則模板'
         });
@@ -1545,9 +1551,11 @@ const App = () => {
                 {selectedResult.advanced&&(
                   <section className="rounded-lg border border-amber-200 bg-amber-50 p-3 mb-3 text-xs text-amber-950 space-y-1">
                     <strong className="block text-sm">{selectedResult.advanced.label}</strong>
-                    <p>特徵匹配 {selectedResult.advanced.matches} 點；幾何內點 {selectedResult.advanced.inliers} 點（{selectedResult.advanced.inlierRatio}%）；覆蓋 {selectedResult.advanced.coverage}%</p>
+                    <p>辨識方法：{selectedResult.advanced.method??'FAST / BRIEF'}；特徵匹配 {selectedResult.advanced.matches} 點；幾何內點 {selectedResult.advanced.inliers} 點（{selectedResult.advanced.inlierRatio}%）；空間特徵覆蓋 {selectedResult.advanced.coverage}%</p>
+                    <p>對齊有效重疊區域：{selectedResult.advanced.overlap??'不足以計算'}%</p>
                     <p>對齊 SSIM：{selectedResult.advanced.alignedSSIM??'資料不足'}%｜差異區域：{selectedResult.advanced.differenceArea??'資料不足'}%</p>
                     <p>DINOv2 局部 Patch：{selectedResult.advanced.patchSimilarity==null?'模型未回傳局部特徵':selectedResult.advanced.patchSimilarity+'%'}</p>
+                    {selectedResult.advanced.matchImage&&<div><p>局部特徵連線圖（綠色為幾何內點）</p><img src={selectedResult.advanced.matchImage} alt="兩張照片之幾何一致性特徵連線圖" className="w-full rounded border border-amber-200 mt-2"/></div>}
                     {selectedResult.advanced.heatmap&&<img src={selectedResult.advanced.heatmap} alt="對齊後差異熱區，紅色代表視覺差異" className="w-full rounded border border-amber-200 mt-2"/>}
                     <p className="leading-relaxed">{selectedResult.advanced.note}</p>
                   </section>
