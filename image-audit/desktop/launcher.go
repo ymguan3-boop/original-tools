@@ -64,7 +64,7 @@ func newHandler(root string) http.Handler {
      http.ServeContent(w, r, "application.html", st.ModTime(), f)
      return
    }
-   if strings.HasPrefix(r.URL.Path, "/models/") || strings.HasPrefix(r.URL.Path, "/assets/") {
+   if strings.HasPrefix(r.URL.Path, "/models/") || strings.HasPrefix(r.URL.Path, "/assets/") || r.URL.Path == "/docxWriter.js" || r.URL.Path == "/docx-export.js" {
      fs.ServeHTTP(w, r)
      return
    }
