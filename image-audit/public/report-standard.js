@@ -52,23 +52,24 @@ function evidence(c){
  const v=c.visual||{},a=c.advanced;
  const out=[
   '【共同快速影像比對】',
-  '1. 共同視覺相似度：'+number(c.score)+'；依 pHash、dHash、明暗結構與邊緣等特徵產生，是查核排序分數，非同源機率。',
+  '1. 共同視覺初篩分數：'+number(c.score)+'（跨版本一致的候選排序分數，非同一影像來源機率）。',
   '2. pHash（頻率構圖）：'+number(c.hash??v.hash)+'；dHash（亮暗變化）：'+number(c.dhash??v.dhash)+'。',
   '3. 明暗結構：'+number(c.structure??v.structure)+'；邊緣一致性：'+number(c.edges??v.edges)+'；位置校正：'+number(c.registered??v.registered)+'。',
-  '4. 像素：'+number(c.pix??v.pix)+'；色彩：'+number(c.col??v.col)+'，僅用作輔助查核。'
+  '4. 像素：'+number(c.pix??v.pix)+'；色彩：'+number(c.col??v.col)+'，僅用作輔助查核。',
+  '5. 白邊處理與多區域取樣：'+(v.borderTrimmed?'偵測並排除外側近白邊，與全圖及中心裁切共同比對':'使用原圖及多區域裁切特徵')+'；最佳區域：'+text(v.area||'全圖',45)+'。'
  ];
  if(c.edition==='desktop'||a){
   out.push('【桌面版全配對辨識：按「開始分析」自動執行】');
-  out.push('5. DINOv2-small 全圖語意特徵：'+number(c.dino)+'，辨識場景內容是否接近；不改動共同分數。');
-  out.push('6. DINOv2 局部 Patch：'+(c.patchSimilarity==null?'目前模型無可用局部特徵輸出':number(c.patchSimilarity))+'，輔助觀察區域特徵。');
+  out.push('6. DINOv2-small 全圖語意特徵：'+number(c.dino)+'，辨識場景內容是否接近；不改動共同分數。');
+  out.push('7. DINOv2 局部 Patch：'+(c.patchSimilarity==null?'目前模型無可用局部特徵輸出':number(c.patchSimilarity))+'，輔助觀察區域特徵。');
   if(a?.status==='byte-identical'){
-   out.push('7. SHA-256：已確認檔案位元組完全相同；不必以局部特徵再證明位元組相同。');
+   out.push('8. SHA-256：已確認檔案位元組完全相同；不必以局部特徵再證明位元組相同。');
   }else if(a){
-   out.push('7. FAST／方向 BRIEF：擷取局部角點與描述子；雙圖匹配 '+a.matches+' 點。');
-   out.push('8. RANSAC 幾何一致性（縮放、旋轉、平移）：'+a.inliers+' 個內點、內點比例 '+number(a.inlierRatio)+'、特徵覆蓋 '+number(a.coverage)+'。');
-   out.push('9. 幾何對齊後 SSIM：'+number(a.alignedSSIM)+'；差異像素區域：'+number(a.differenceArea)+'。');
-   out.push('10. 局部辨識結果：'+text(a.label,140)+'。'+text(a.note,220));
-  }else out.push('7–10. 本組局部辨識尚未取得結果，須重新分析，不能以未取得結果推定不同照片。');
+   out.push('8. 局部特徵方法：'+text(a.method||'FAST / BRIEF',80)+'；雙圖匹配 '+a.matches+' 點'+(a.siftMatches!=null?'（SIFT-style 候選 '+a.siftMatches+' 點）':'')+'。');
+   out.push('9. RANSAC 幾何一致性（縮放、旋轉、位移）：'+a.inliers+' 個內點、內點比例 '+number(a.inlierRatio)+'、特徵分布範圍 '+number(a.coverage)+'。');
+   out.push('10. 對齊後 SSIM：'+number(a.alignedSSIM)+'；有效重疊面積比例：'+number(a.overlap)+'；差異像素比例：'+number(a.differenceArea)+'。');
+   out.push('11. 影像同源判讀：'+text(a.label,140)+'。'+text(a.note,220));
+  }else out.push('8–11. 本組局部辨識尚未取得結果，須重新分析，不能以未取得結果推定不同照片。');
   if(c.geometryRescued===true)out.push('【補列原因】本組共同分數低於設定門檻，但局部幾何證據支持疑似同源，因此仍列入查核清單。');
  }
  out.push('【解讀限制】這些均為影像特徵指標；不等於同一拍攝來源、違規或重複請款的機率。');
@@ -77,8 +78,8 @@ function evidence(c){
 function triage(c){
  const a=c.advanced;
  if(c.identical===true||a?.status==='byte-identical')return 'SHA-256 確認檔案完全相同，應優先查證跨批次引用及施工佐證，但不得直接推定重複計價。';
- if(a?.status==='verified')return 'FAST／BRIEF 幾何匹配與對齊後 SSIM 共同支持高度疑似同一影像來源，列為優先複核。即使共同視覺分數較低，也不得忽略幾何證據；仍須查證原始影像及工程紀錄。';
- if(a?.status==='review')return '存在局部特徵幾何對應，但證據尚不足以確認同源，列為人工複核。';
+ if(a?.status==='verified')return (a.method||'FAST／BRIEF')+' 與 RANSAC 的幾何對應，加上有效重疊區域 SSIM，共同支持高度疑似同一來源。快速分數可能因白邊或裁切偏低，仍須核對原始照片、拍攝時間與工程紀錄。';
+ if(a?.status==='review')return '部分局部特徵具幾何對應，但目前證據不能確認同源；列為人工複核，亦不得認定必然不同。';
  if(c.strongEvidence===true||c.visual?.strongEvidence===true)return '多項快速視覺證據一致，建議優先核對原始照片；局部幾何結果可能不足或未取得。';
  const value=Number(c.score);
  if(Number.isFinite(value)&&value>=75)return '照片有可比對的視覺相似處，應人工複核；無法只憑分數確認是否同源。';
