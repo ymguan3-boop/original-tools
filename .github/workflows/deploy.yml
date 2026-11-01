@@ -124,7 +124,7 @@ jobs:
       - name: Build Windows PDF AI Studio GUI launcher
         run: |
           mkdir -p pdf-ai-video-studio/desktop-build
-          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -H=windowsgui" -o pdf-ai-video-studio/desktop-build/啟動PDF智慧影音.exe pdf-ai-video-studio/desktop/launcher.go
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -H=windowsgui" -o pdf-ai-video-studio/desktop-build/啟動PDF智慧影音.exe pdf-ai-video-studio/desktop/launcher.go pdf-ai-video-studio/desktop/preflight.go
           test -s pdf-ai-video-studio/desktop-build/啟動PDF智慧影音.exe
           echo "Windows GUI launcher built."
 
