@@ -9,7 +9,7 @@ import mimetypes
 import engine_service
 
 ROOT=Path(__file__).resolve().parent
-ORIGINS={"http://127.0.0.1:8765","http://localhost:8765","https://ymguan3-boop.github.io","http://127.0.0.1:8777","http://localhost:8777","http://127.0.0.1:8000","http://localhost:8000"}
+ORIGINS={"http://127.0.0.1:8765","http://localhost:8765","http://127.0.0.1:8777","http://localhost:8777","http://127.0.0.1:8000","http://localhost:8000"}
 # Exact static file allowlist. Never expose .env, Python sources, or model files.
 PACKAGE_ROOT=ROOT.parent.parent
 STUDIO_ROOT=ROOT.parent
@@ -105,6 +105,9 @@ async def tts(text,voice):
 class Handler(BaseHTTPRequestHandler):
     server_version="PDFStudioLocal/1.0"
     def allowed(self):
+        # Prevent remote websites/DNS rebinding from using local AI/TTS APIs.
+        if self.headers.get("Host") not in {"127.0.0.1:8765","localhost:8765"}:
+            return False
         origin=self.headers.get("Origin")
         return origin is None or origin in ORIGINS
     def send_json(self,code,value):
