@@ -1,4 +1,4 @@
-/* PDF AI Video Studio. Runs on GitHub Pages; no API keys are stored in the page. */
+/* PDF AI Video Studio Windows desktop HTML frontend. Served only from 127.0.0.1; secrets remain in local .env. */
 "use strict";
 (function () {
   const $ = (id) => document.getElementById(id);
