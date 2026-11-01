@@ -8,6 +8,7 @@ const js = fs.readFileSync(path.join(root, "app.js"), "utf8");
 const python = fs.readFileSync(path.join(root, "local-service/server.py"), "utf8");
 const go = fs.readFileSync(path.join(root, "desktop/launcher.go"), "utf8");
 const guide = fs.readFileSync(path.join(root, "desktop/setup-guide.html"), "utf8");
+const preflight = fs.readFileSync(path.join(root, "desktop/preflight.go"), "utf8");
 for (const id of [
   "setupOverlay", "setupOpen", "setupClose", "setupContinue", "setupRefresh",
   "setupSummary", "setupBasicStatus", "setupAdvancedStatus",
@@ -26,6 +27,17 @@ assert.match(js, /"\/api\/tts"/);
 assert.match(python, /def save_llm_config/);
 assert.match(python, /def test_llm_config/);
 assert.match(go, /openOfflineGuide\(base\)/);
+assert.match(go, /runHardwarePreflight\(base\)/);
+assert.match(preflight, /LogicalCores/);
+assert.match(preflight, /GlobalMemoryStatusEx/);
+assert.match(preflight, /GetDiskFreeSpaceExW/);
+assert.match(preflight, /nvidia-smi/);
+assert.match(preflight, /BasicReady/);
+for (const id of ["hardwarePreflight", "setupHardwareStatus"]) {
+  assert.match(html, new RegExp('id="' + id + '"'));
+  assert.ok(js.includes('$("' + id + '")'), "Missing hardware UI wiring " + id);
+}
+assert.match(js,/renderHardwarePreflight/);
 assert.match(guide, /python\.org\/downloads\/windows/);
 assert.match(guide, /comfy\.org\/download/);
 assert.doesNotMatch(html, /type="text"[^>]*id="setupKey"/);
