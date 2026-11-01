@@ -13,3 +13,12 @@ data/
 *.log
 .DS_Store
 Thumbs.db
+
+# Private engineering photo acceptance benchmark: NEVER commit original images/archives
+image-audit/tests/private-data/
+image-audit/tests/private-fixtures/
+image-audit/tests/private-benchmark-*.zip
+image-audit/tests/engineering_photo_private_benchmark*.zip
+工程驗收照片資料集.zip
+engineering_photo_private_benchmark*.zip
+__pycache__/
