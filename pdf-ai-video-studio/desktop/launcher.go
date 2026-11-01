@@ -10,6 +10,7 @@ import (
 	"io"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,6 +37,13 @@ func dialog(title, message string, flags uintptr) int {
 }
 func openURL(url string) {
 	_ = exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", url).Start()
+}
+func openOfflineGuide(base string) {
+	page := filepath.Join(base,"pdf-ai-video-studio","desktop","setup-guide.html")
+	if _, err := os.Stat(page); err != nil { return }
+	// Encode local Windows paths correctly, including Chinese folder names.
+	u:=url.URL{Scheme:"file",Path:"/"+filepath.ToSlash(page)}
+	openURL(u.String())
 }
 func pyVersion(out string) bool {
 	part := strings.Fields(strings.TrimSpace(out))
@@ -105,7 +113,9 @@ func main() {
 			"請到 Python 官方網站下載 Windows 安裝程式，安裝完成後重新雙擊本啟動器。\n\n" +
 			"官方網址：\n" + downloadPython + "\n\n" +
 			"按「是」將自動開啟 Python 官方下載頁。"
-		if dialog("需要先安裝 Python",message,0x04|0x30)==6 { openURL(downloadPython) }
+		answer:=dialog("需要先安裝 Python",message,0x04|0x30)
+		openOfflineGuide(base)
+		if answer==6 { openURL(downloadPython) }
 		return
 	}
 	venv := filepath.Join(base,"pdf-ai-video-studio","local-service",".venv")
@@ -118,6 +128,7 @@ func main() {
 		dialog("首次設定","已找到 "+version+"。\n\n首次啟動會建立獨立 Python 虛擬環境；不會更動系統 Python。\n接下來可能需要網路安裝少量必要套件。",0x40)
 		if err := runWait(parts,log,"-m","venv",venv); err != nil {
 			fail("無法建立 Python 環境。請檢查磁碟可寫入權限及 Python 是否完整安裝。\n詳見 pdf-studio-launch.log")
+			openOfflineGuide(base)
 			return
 		}
 	}
@@ -130,6 +141,7 @@ func main() {
 			0x04|0x20)!=6 { return }
 		if err := runWait(venvParts,log,"-m","pip","install","--disable-pip-version-check","-r",requirements); err != nil {
 			fail("Python 套件安裝失敗。請確認網路與磁碟空間，詳見 pdf-studio-launch.log")
+			openOfflineGuide(base)
 			return
 		}
 	}
