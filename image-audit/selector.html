@@ -36,6 +36,14 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
 .faq details p{font-size:13px;margin:9px 0 2px;line-height:1.85}
 @media(max-width:680px){.guide{padding:21px 16px}.steps{grid-template-columns:1fr}.step{min-height:0}}
 @media(max-width:680px){.grid{grid-template-columns:1fr}.wrap{padding:24px 15px 60px}.card{padding:23px}}
+
+.parameter-scroll{overflow-x:auto;border:1px solid #d9e3f0;border-radius:14px;background:#fff;margin-top:14px}
+.parameter-table{width:100%;border-collapse:collapse;min-width:880px;font-size:13px;line-height:1.65;color:#344866}
+.parameter-table th{background:#eaf1ff;color:#163f7b;text-align:left;padding:12px;position:sticky;top:0;border-bottom:1px solid #cfdbee}
+.parameter-table td{padding:12px;vertical-align:top;border-bottom:1px solid #edf1f7}
+.parameter-table tr:nth-child(even){background:#f9fbff}
+.parameter-table .param-name{font-weight:750;color:#173f7c;min-width:132px}
+.parameter-table td:nth-child(2){white-space:nowrap}
 </style></head>
 <body><main class="wrap">
 <a class="back" href="../">← 返回原創工具集</a>
@@ -68,10 +76,27 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
 </div>
 <div class="guide-note"><strong>檔案保留提醒：</strong> ZIP 中的 <code>index.html</code> 是瀏覽器介面本體。<code>assets/</code>、<code>models/</code>、<code>comparator-core.js</code>、<code>docxWriter.js</code> 等都需保留；FAST／BRIEF、SIFT-style 梯度補強、RANSAC、SSIM 的程式整合在編譯後的 <code>assets/</code> 內。請保留解壓縮後的完整資料夾；操作說明已集中在本網頁，ZIP 不必再附獨立的 TXT 說明檔。</div>
 <h3 class="subhead">兩版的辨識參數及適用範圍</h3>
-<div class="steps">
- <article class="step"><h3>網頁版｜快速篩選</h3><p>pHash（感知雜湊）、dHash（亮暗差異）、明暗結構、邊緣一致性、像素差異、色彩分布、全圖／中心裁切及位置校正。優先追求速度與一致的共同視覺門檻；不加入 DINOv2、MobileSAM、YOLO。</p></article>
- <article class="step"><h3>桌面版｜全部組別自動精查</h3><p>保留網頁版共同視覺分數，另有 DINOv2 384 維特徵及可用時的 Patch 特徵。所有跨批次照片配對會自動執行 FAST／方向 BRIEF 及 SIFT-style 梯度補強、相似變換 RANSAC、對齊 SSIM；低於共同分數門檻但具幾何高度疑似證據者會補列。匯出 DOCX 會記載全部已入選的照片對照組，附上內點數、覆蓋率及 SSIM，且不改動共同相似度。</p></article>
-</div><div class="guide-note">此版未整合完整 OpenCV ORB / Homography，也未打包 MobileSAM 或 YOLO 模型；幾何驗證使用本機輕量 FAST / 方向 BRIEF 與相似變換 RANSAC。各項指標都不代表「重複請款機率」，須搭配原始照片及工程資料進一步查證。更多參數用途可於兩版的「辨識參數說明」展開檢視。</div>
+<p class="sub">「百分比」有三種不同意義：<strong>基礎計分權重</strong>、<strong>特徵或幾何指標</strong>、<strong>有效像素占比</strong>；都不是同源或違規的統計機率。基礎分數另有可信度封頂與補正，不能直接加權相加推得畫面結果。</p>
+<div class="parameter-scroll" role="region" aria-label="兩版辨識參數功能與百分比定義" tabindex="0">
+<table class="parameter-table">
+<thead><tr><th scope="col">辨識參數</th><th scope="col">適用版本</th><th scope="col">功能</th><th scope="col">百分比／指標定義</th><th scope="col">適用範圍與限制</th></tr></thead>
+<tbody><tr><td class="param-name">共同視覺初篩分數</td><td>雙版</td><td>彙整構圖、明暗與邊緣，排序候選照片</td><td>0–100 分；基礎權重 pHash 38%＋結構 33%＋邊緣 18%＋dHash 11%，另有門檻上限及補正；不是機率</td><td>快速初篩；同一門檻可比較；大量裁切時仍可能漏列</td></tr>
+<tr><td class="param-name">pHash</td><td>雙版</td><td>比較低頻構圖是否相近</td><td>相同位元 ÷ 63 × 100%；38% 是基礎計分權重，不是 pHash 正確率</td><td>重壓縮、縮放；大裁切及高相似紋理須複核</td></tr>
+<tr><td class="param-name">dHash</td><td>雙版</td><td>比較相鄰區域的亮暗變化</td><td>相同位元 ÷ 64 × 100%；基礎權重 11%</td><td>粗略輪廓；光照與大幅裁切可能影響</td></tr>
+<tr><td class="param-name">明暗結構</td><td>雙版</td><td>比較 32×32 灰階的空間布局</td><td>灰階相關性轉換為 0–100 指標；基礎權重 33%</td><td>相同場景、局部亮度差；同色背景可能誤導</td></tr>
+<tr><td class="param-name">邊緣一致性</td><td>雙版</td><td>比較灰階邊緣方向及強度</td><td>梯度相關性轉換為 0–100 指標；基礎權重 18%</td><td>結構與輪廓相近；旋轉、遮擋會降低</td></tr>
+<tr><td class="param-name">像素／色彩</td><td>雙版</td><td>像素 RGB 差距及色彩直方圖交集</td><td>0–100 相似指標；主要供輔助，不直接各占主分數</td><td>相近曝光與場景；相同顏色不能證明同源</td></tr>
+<tr><td class="param-name">去白邊／區域／位置校正</td><td>雙版</td><td>保守去除外側近白邊；比對全圖／中心／去白邊；檢查小位移</td><td>區域選擇非百分比；位置校正是相關性映射 0–100；±4 格只容許有限位移</td><td>掃描頁面留白及小裁切；不等於物件分割或透視校正</td></tr>
+<tr><td class="param-name">DINOv2-small CLS</td><td>僅桌面</td><td>384 維全圖語意特徵餘弦比對</td><td>餘弦值 × 100 顯示為分數；不是同源機率；不加入共同初篩門檻</td><td>同類場景輔助；不同照片拍攝相同物件也可能高分</td></tr>
+<tr><td class="param-name">DINOv2 Patch</td><td>僅桌面，模型支援時</td><td>局部 token／區域特徵比對</td><td>局部餘弦 × 100；模型無局部輸出須顯示未取得</td><td>局部場景輔助；不單獨認定同源</td></tr>
+<tr><td class="param-name">SHA-256</td><td>僅桌面</td><td>確認檔案位元組完全一致</td><td>相同／不同（無相似度百分比）</td><td>完全重複檔案；裁切或重存後雜湊通常不同</td></tr>
+<tr><td class="param-name">FAST／方向 BRIEF</td><td>僅桌面</td><td>擷取角點與二進位描述子，供跨圖匹配</td><td>報告匹配點數，非百分比；不是 OpenCV ORB</td><td>位移、旋轉與部分裁切；少紋理易漏判</td></tr>
+<tr><td class="param-name">多尺度 SIFT-style</td><td>僅桌面，後備</td><td>FAST 證據不足時，使用自有 128 維方向梯度描述子</td><td>報告匹配點數，非百分比；不是完整 OpenCV SIFT</td><td>較大裁切及區域特徵補強；仍可能漏判</td></tr>
+<tr><td class="param-name">RANSAC</td><td>僅桌面</td><td>過濾錯誤對應並檢查相似變換幾何一致</td><td>內點比例＝RANSAC 內點數／候選匹配點數 × 100%；覆蓋率＝內點座標外接框／384×288 畫面 × 100%</td><td>同源幾何線索；非透視 Homography、非違規機率</td></tr>
+<tr><td class="param-name">對齊後 SSIM</td><td>僅桌面</td><td>評估幾何對齊區域的局部明暗／結構</td><td>有效區域平均 SSIM 映射至 0–100；不是兩張照片同源機率</td><td>檢查結構一致，可能受光照、遮擋與雜訊影響</td></tr>
+<tr><td class="param-name">重疊率／差異區域</td><td>僅桌面</td><td>標記幾何映射的有效影像範圍及超過閾值的灰階差異</td><td>重疊率＝有效對齊像素數／兩圖有效像素數較小值 × 100%；差異比例＝亮度差大於 32 的像素／有效像素 × 100%</td><td>揭露局部驗證範圍；重疊率 100% 不代表影像完全相同</td></tr>
+<tr><td class="param-name">MobileSAM／YOLO</td><td>兩版均未加入</td><td>物件分割／辨識，非本次必要功能</td><td>未執行，不應顯示百分比</td><td>將來有指定物件數量或輪廓需求才評估</td></tr></tbody></table></div>
+<div class="guide-note"><b>判讀提醒：</b>網頁版以速度為優先，桌面版對全批次配對進行局部幾何驗證。低於共同視覺門檻但符合局部幾何條件者可在桌面版補列。SIFT-style 不是完整 OpenCV SIFT；RANSAC 的「內點比例」不是重複請款機率。OpenRouter 僅於使用者主動同意時作為可見內容說明。</div>
 <h3 class="subhead">v2.5.0｜全照片自動進階查核與報告升級</h3>
 <div class="steps">
  <article class="step"><h3>網頁版／免安裝 HTML 版</h3><p>修復以 390px JPEG 縮圖計算相似度造成的偏差，改由原始照片解碼後取樣。縮圖仍僅用於顯示及報告。保留快速 pHash、dHash、結構、邊緣與位置校正，不加入 DINOv2、SAM、YOLO。</p></article>
