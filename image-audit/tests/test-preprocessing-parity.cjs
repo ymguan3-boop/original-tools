@@ -22,7 +22,7 @@ async function verify(page){
  assert.equal(got.thumb,'blob:compressed-thumbnail');
  assert.equal(calls.join('|'),'decode-original|shared-prepare|closed-original|encode-thumb','Thumb generated before original multi-region scoring');
  assert.ok(!src.includes('full:sample(img),center:sample(img,true)'),'Old lossy scoring still in page');
- assert.ok(src.includes('v2.5.0'),'Build and version must be traceable');
+ assert.ok(src.includes('v2.5.1'),'Build and version must be traceable');
 }
 (async()=>{
  await verify('online/index.html');
@@ -36,12 +36,12 @@ async function verify(page){
  assert.ok(desktop.includes('if(score<listThreshold&&!rescued)'),'threshold incorrectly applied before all-pair geometry');
  assert.ok(desktop.includes('FAST／BRIEF')||desktop.includes('FAST / BRIEF'), 'export report lacks model-independent geometry explanation');
  const selector=fs.readFileSync(path.join(root,'selector.html'),'utf8');
- assert.ok(selector.includes('下載桌面版 v2.5.0'),'download version stale');
+ assert.ok(selector.includes('下載桌面版 v2.5.1'),'download version stale');
  assert.ok(selector.includes('匯出 DOCX'),'download instructions do not mention auto verification');
  assert.ok(selector.includes('FAST／BRIEF'),'missing advanced recognition description');
  const packageJson=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
  const lock=JSON.parse(fs.readFileSync(path.join(root,'package-lock.json'),'utf8'));
- assert.equal(packageJson.version,'2.5.0');assert.equal(lock.version,packageJson.version);
+ assert.equal(packageJson.version,'2.5.1');assert.equal(lock.version,packageJson.version);
  assert.equal(lock.packages[''].version,packageJson.version);
  console.log('PASS: original source scoring parity, thumbnail independence, desktop forensic export and v2.3 install guide');
 })().catch(e=>{console.error(e);process.exitCode=1});
