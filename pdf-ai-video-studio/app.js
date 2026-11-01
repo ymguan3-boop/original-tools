@@ -599,6 +599,159 @@
     }finally{state.clipBusy=false;setBusy(false);}
   }
 
+
+  // First-run interactive checklist; controls stay in the local HTML app.
+  const setup = {
+    overlay:$("setupOverlay"), open:$("setupOpen"), close:$("setupClose"),
+    summary:$("setupSummary"), basic:$("setupBasicStatus"), advanced:$("setupAdvancedStatus"),
+    provider:$("setupProvider"),base:$("setupBase"),model:$("setupModel"),key:$("setupKey"),
+    llm:$("setupLLMStatus"),save:$("setupSaveLLM"),testLLM:$("setupTestLLM"),
+    testVoice:$("setupTestVoice"),voice:$("setupVoiceStatus"),
+    refresh:$("setupRefresh"),continueBtn:$("setupContinue"),
+    loadedBase:"",busy:false,voiceVerified:false
+  };
+  const canRecordWebm=()=>typeof MediaRecorder!=="undefined" &&
+    typeof ui.preview.captureStream==="function" &&
+    typeof (window.AudioContext||window.webkitAudioContext)!=="undefined" &&
+    ["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"]
+      .some(t=>MediaRecorder.isTypeSupported(t));
+  function setSetupBusy(busy){
+    setup.busy=busy;
+    [setup.refresh,setup.save,setup.testLLM,setup.testVoice].forEach(btn=>btn.disabled=busy);
+  }
+  function showSetup(){
+    setup.overlay.hidden=false;
+    setup.open.setAttribute("aria-expanded","true");
+    setup.close.focus();
+    refreshSetup().catch(e=>{
+      setup.summary.textContent="環境檢查失敗："+e.message;
+      setup.summary.classList.add("warn");
+    });
+  }
+  function closeSetup(){
+    if(setup.busy)return;
+    setup.overlay.hidden=true;
+    setup.open.setAttribute("aria-expanded","false");
+    setup.open.focus();
+  }
+  function renderSetupSummary(){
+    const local=state.service;
+    const pdf=typeof pdfjsLib!=="undefined";
+    const webm=canRecordWebm();
+    if(!local||!pdf||!webm){
+      setup.summary.textContent="尚未完成基本製片環境："+
+       (!local?"本機服務未連線；":"")+
+       (!pdf?"PDF.js 無法載入；":"")+
+       (!webm?"瀏覽器不支援 WebM／音訊錄製；":"");
+      setup.summary.classList.add("warn");
+      setup.basic.textContent="✕ 請先處理上方項目，再點「重新檢查」。Python 缺少時請重新雙擊 EXE 依官方下載指引安裝。";
+      return;
+    }
+    setup.summary.classList.remove("warn");
+    setup.basic.textContent="✓ Python 本機服務、PDF.js、WebM 與 Web Audio 已可使用；PDF 匯入及逐頁編輯可開始。";
+    const llmReady=ui.scripts.dataset.llm==="1";
+    setup.summary.textContent=llmReady
+      ?"✓ 基本製片環境完成；LLM 已設定。建議測試語音後開始製片。"
+      :"✓ 基本製片環境完成！可直接手動編輯旁白；AI 文案可選擇在第 2 步設定。";
+  }
+  async function refreshSetup(){
+    if(setup.busy)return;
+    setSetupBusy(true);
+    setup.summary.textContent="正在重新檢查本機服務和模型連線…";
+    try{
+      await checkHealth();
+      await checkAIEngine();
+      renderSetupSummary();
+      const st=state.engineStatus;
+      const installed=st?.engines?.filter(e=>e.workflow_ready)||[];
+      setup.advanced.textContent=st
+        ?(st.comfyui_ready?"✓ ComfyUI 已連線；":"ComfyUI 尚未連線，若已安裝請先啟動；")+
+          "已配置工作流："+(installed.map(e=>e.label).join("、")||"無")+
+          "。GPU："+(st.hardware?.gpu?st.hardware.name:"未偵測到 NVIDIA GPU")+
+          "；模型需完成實際生成測試。"
+        :"ComfyUI 狀態無法取得；先確認本機程式已啟動。";
+      if(state.service){
+        const r=await fetch(LOCAL+"/api/setup/llm-config",{cache:"no-store"});
+        if(!r.ok)throw new Error("無法取得 LLM 設定");
+        const d=await r.json();
+        if(document.activeElement!==setup.base)setup.base.value=d.base_url||"";
+        if(document.activeElement!==setup.model)setup.model.value=d.model||"";
+        setup.loadedBase=d.base_url||"";
+        setup.llm.textContent=d.configured
+          ?"已儲存模型 "+d.model+"；"+(d.has_api_key?"使用本機保留的 API Key":"未設定 API Key（本機模型可免金鑰）")+"。可按「測試 LLM 連線」。"
+          :"目前未設定 LLM；若只做手動旁白，可略過此步驟。";
+      }else{
+        setup.llm.textContent="本機服務未連線，無法設定 LLM。";
+      }
+    }finally{setSetupBusy(false);}
+  }
+  setup.provider.addEventListener("change",()=>{
+    if(setup.provider.value==="ollama"){
+      setup.base.value="http://127.0.0.1:11434/v1";
+      if(!setup.model.value)setup.model.value="llama3.2";
+      setup.key.value="";
+      setup.llm.textContent="請先安裝並啟動 Ollama，下載模型後再儲存設定與測試。";
+    }else{
+      setup.base.value="";
+      setup.model.value="";
+      setup.key.value="";
+      setup.llm.textContent="請填入實際供應商的 OpenAI 相容網址、模型 ID，以及自己的金鑰。";
+    }
+  });
+  setup.save.addEventListener("click",async()=>{
+    if(setup.busy)return;
+    setSetupBusy(true);
+    setup.llm.textContent="正在儲存至本機設定檔…";
+    try{
+      const base=setup.base.value.trim();
+      const key=setup.key.value.trim();
+      const saved=await api("/api/setup/llm-config",{
+        base_url:base,model:setup.model.value.trim(),api_key:key,
+        keep_existing_key:!key&&base===setup.loadedBase&&setup.provider.value!=="ollama"
+      });
+      setup.loadedBase=saved.base_url;
+      setup.key.value="";
+      setup.llm.textContent="✓ 設定已儲存於本機。下一步請按「測試 LLM 連線」。";
+      await checkHealth();
+      renderSetupSummary();
+    }catch(e){setup.llm.textContent="✕ 儲存失敗："+e.message;}
+    finally{setSetupBusy(false);}
+  });
+  setup.testLLM.addEventListener("click",async()=>{
+    if(setup.busy)return;
+    setSetupBusy(true);
+    setup.llm.textContent="向你設定的 LLM 端點發送測試訊息中…";
+    try{
+      const d=await api("/api/setup/llm-test",{});
+      setup.llm.textContent="✓ "+(d.message||"LLM 連線成功")+"。";
+    }catch(e){setup.llm.textContent="✕ LLM 測試失敗："+e.message;}
+    finally{setSetupBusy(false);}
+  });
+  setup.testVoice.addEventListener("click",async()=>{
+    if(setup.busy)return;
+    setSetupBusy(true);
+    setup.voice.textContent="正在測試 Edge-TTS（須連網）…";
+    try{
+      const d=await api("/api/tts",{text:"您好，歡迎使用 PDF 智慧影音製作系統。",voice:ui.voice.value});
+      if(!d.audio_base64)throw new Error("沒有取得音檔");
+      setup.voiceVerified=true;
+      setup.voice.textContent="✓ 已成功產生臺灣中文示範音檔，可以開始製片。";
+      const player=new Audio("data:audio/mpeg;base64,"+d.audio_base64);
+      player.play().catch(()=>{setup.voice.textContent="✓ 已成功產生音檔；瀏覽器阻止自動播放，但語音服務可用。";});
+    }catch(e){setup.voice.textContent="✕ 配音測試失敗："+e.message;}
+    finally{setSetupBusy(false);}
+  });
+  setup.open.addEventListener("click",showSetup);
+  setup.close.addEventListener("click",closeSetup);
+  setup.continueBtn.addEventListener("click",closeSetup);
+  setup.refresh.addEventListener("click",()=>refreshSetup().catch(e=>{
+    setup.summary.textContent="檢查失敗："+e.message;
+    setup.summary.classList.add("warn");
+  }));
+  document.addEventListener("keydown",e=>{
+    if(e.key==="Escape"&&!setup.overlay.hidden&&!setup.busy)closeSetup();
+  });
+
   ui.file.addEventListener("change",e=>{if(e.target.files[0])loadPDF(e.target.files[0]);});
   ui.title.addEventListener("input",()=>{if(!state.playing)drawScene(state.selected,0);});
   ui.mode.addEventListener("change",()=>{
@@ -638,5 +791,6 @@
   ui.clipGenerate.addEventListener("click",generateAIClip);
   ui.health.addEventListener("click",()=>{checkHealth().then(checkAIEngine);});
   window.addEventListener("focus",()=>{checkHealth().then(checkAIEngine);});
-  drawScene(0,0);checkHealth().then(checkAIEngine);
+  drawScene(0,0);
+  showSetup();
 })();
