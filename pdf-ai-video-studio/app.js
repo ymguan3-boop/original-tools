@@ -13,13 +13,16 @@
     editorTitle:$("editorTitle"),audioState:$("audioState"),meta:$("pageMeta"),
     play:$("playPreview"),stop:$("stopPreview"),export:$("exportVideo"),
     clock:$("clock"),log:$("log"),health:$("serverStatus"),
-    restore:$("restoreText"),download:$("downloadScript")
+    restore:$("restoreText"),download:$("downloadScript"),
+    engine:$("aiEngine"),engineCheck:$("engineCheck"),engineInfo:$("engineDetails"),
+    clipPrompt:$("aiPrompt"),reference:$("referenceImage"),clipGenerate:$("generateAIClip"),
+    clipStatus:$("engineResult")
   };
   const state = {
     doc:null,pages:[],selected:0,cache:new Map(),title:"",bgmURL:null,
     service:false,busy:false,playing:false,session:0,playingPage:0,
     voice:null,music:null,ctx:null,recorder:null,stream:null,raf:0,
-    clockOffset:0,sceneTimer:null
+    clockOffset:0,sceneTimer:null,engineStatus:null,clipBusy:false
   };
   const ctx = ui.preview.getContext("2d",{alpha:false});
   function say(msg,bad) { ui.log.textContent=(bad?"⚠ ":"✓ ")+msg; ui.log.style.borderColor=bad?"#ffb273":"#5db9f9"; }
@@ -52,6 +55,7 @@
     ui.play.disabled=!ready||!hasAudio();
     ui.export.disabled=!ready||!hasAudio()||!window.MediaRecorder||!ui.preview.captureStream;
     ui.stop.disabled=!state.playing;
+    ui.clipGenerate.disabled=!ready||!state.service||!state.engineStatus?.comfyui_ready||!ui.engine.value||!state.engineStatus.engines.some(e=>e.id===ui.engine.value&&e.workflow_ready)||state.clipBusy;
     ui.aspect.disabled=state.playing;ui.template.disabled=state.playing;
     ui.bgm.disabled=!ui.music.checked;
     ui.volume.disabled=!ui.music.checked;
@@ -125,7 +129,7 @@
     setBusy(true);say("正在解析 PDF 與底線位置…");
     try{
       if(state.doc){await state.doc.destroy().catch(()=>{});}
-      for(const p of state.pages)revokeAudio(p);
+      for(const p of state.pages){revokeAudio(p);if(p.clipURL)URL.revokeObjectURL(p.clipURL);}
       state.cache.clear();
       pdfjsLib.GlobalWorkerOptions.workerSrc="../pdf-voice-video/lib/pdf.worker.min.js";
       const doc=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false}).promise;
@@ -138,7 +142,7 @@
         const text=clean(content.items.map(x=>x.str).join(" "));
         const underlines=await underlineShapes(page);
         const script=text.slice(0,260);
-        state.pages.push({index:i,text,script,underlines,audioURL:null,audioText:null,words:[],duration:estimated(script)});
+        state.pages.push({index:i,text,script,underlines,audioURL:null,audioText:null,words:[],duration:estimated(script),clipURL:null,clipEl:null});
         if(i%5===0)say("已解析 "+i+" / "+doc.numPages+" 頁…");
       }
       if(ui.mode.value==="underline")applyUnderlineMode();
@@ -178,7 +182,7 @@
       const strong=document.createElement("b");strong.textContent="第 "+p.index+" 頁";
       const summary=document.createElement("small");summary.textContent=" · "+(clean(p.script).slice(0,18)||"無文案");
       left.append(strong,summary);
-      const right=document.createElement("small");right.textContent=Math.ceil(p.duration)+"s"+(p.audioURL?" ✓":"");
+      const right=document.createElement("small");right.textContent=Math.ceil(p.duration)+"s"+(p.audioURL?" ♫":"")+(p.clipURL?" 🎬":"");
       b.append(left,right);b.addEventListener("click",()=>chooseScene(i));ui.scenes.appendChild(b);
     }
     updateUI();
@@ -242,6 +246,18 @@
           ctx.fillRect(x+rx*ratio,y+(ry-12)*ratio,rw*ratio,(rh+20)*ratio);
         });ctx.restore();
       }
+    }
+    // AI media is always labelled as a generated illustration, never as PDF evidence.
+    if(p.clipEl && p.clipEl.readyState>=2){
+      const clip=p.clipEl, cw=Math.round(w*(portrait?.56:.29)), ch=Math.round(cw*9/16);
+      const x=w-cw-23, y=header+23;
+      const safeH=Math.min(ch,Math.max(64,h-header-footer-35));
+      ctx.save();ctx.fillStyle="rgba(5,10,20,.93)";ctx.fillRect(x-6,y-6,cw+12,safeH+40);
+      try{ctx.drawImage(clip,x,y,cw,safeH);}catch(_){}
+      ctx.fillStyle="rgba(4,11,21,.9)";ctx.fillRect(x,y+safeH-1,cw,28);
+      ctx.fillStyle="#ffd56c";ctx.font="bold 16px sans-serif";ctx.textAlign="center";
+      ctx.fillText("AI 生成示意 · 非原始證據",x+cw/2,y+safeH+20);
+      ctx.restore();
     }
     const text=clean(p.script);
     if(text){
@@ -370,6 +386,7 @@
   async function playScene(i,sessionId,mg){
     if(!state.playing||sessionId!==state.session)return;
     if(i>=state.pages.length){stopPlayback();return;}
+    if(i>0 && state.pages[i-1]?.clipEl){try{state.pages[i-1].clipEl.pause();}catch(_){}}
     state.playingPage=i;state.selected=i;
     ui.editorTitle.textContent="第 "+(i+1)+" 頁旁白編輯";ui.editor.value=state.pages[i].script;
     ui.audioState.textContent="播放中";
@@ -378,6 +395,9 @@
     if(!state.playing||sessionId!==state.session)return;
     const page=state.pages[i];
     drawScene(i,0);
+    if(page.clipEl){
+      try{page.clipEl.currentTime=0;await page.clipEl.play();}catch(e){console.warn("AI clip preview",e);}
+    }
     if(mg){
       const target=Number(ui.volume.value)/100,now=state.ctx.currentTime;
       mg.gain.cancelScheduledValues(now);
@@ -416,6 +436,7 @@
     cancelAnimationFrame(state.raf);state.raf=0;
     if(state.voice){state.voice.onended=null;state.voice.pause();state.voice.removeAttribute("src");state.voice=null;}
     if(state.music){state.music.pause();state.music=null;}
+    for(const p of state.pages){if(p.clipEl)try{p.clipEl.pause();}catch(_){}}
     if(state.recorder&&state.recorder.state!=="inactive")state.recorder.stop();
     state.recorder=null;
     if(state.stream)state.stream.getTracks().forEach(t=>t.stop());
@@ -431,6 +452,115 @@
     const txt=state.pages.map(p=>"第 "+p.index+" 頁\n"+p.script).join("\n\n---\n\n");
     download(new Blob([txt],{type:"text/plain;charset=utf-8"}),"PDF逐頁旁白.txt");
   }
+
+  // Optional heavyweight models are not silently downloaded. A reviewed
+  // ComfyUI API workflow and compatible model must already be installed.
+  async function checkAIEngine(){
+    if(!state.service){
+      state.engineStatus=null;
+      ui.engineInfo.textContent="本機服務未連線。請使用桌面版啟動器。";
+      updateUI();return;
+    }
+    try{
+      const r=await fetch(LOCAL+"/api/engine/status",{cache:"no-store"});
+      const result=await r.json();
+      if(!r.ok)throw new Error(result.error||"本機 AI 服務錯誤");
+      state.engineStatus=result;
+      const gpu=result.hardware?.gpu
+        ?result.hardware.name+" · "+Math.round(result.hardware.vram_mb/1024)+"GB VRAM"
+        :"未偵測 NVIDIA GPU（仍可使用一般 PDF 製片）";
+      const available=result.engines.filter(e=>e.workflow_ready).map(e=>e.id);
+      ui.engineInfo.textContent=gpu+"；ComfyUI "+(result.comfyui_ready?"已連線":"未連線")+"；已配置工作流："+(available.join("、")||"無");
+      updateUI();
+    }catch(e){
+      state.engineStatus=null;
+      ui.engineInfo.textContent="無法確認 ComfyUI：" + e.message;
+      updateUI();
+    }
+  }
+  async function fileToBase64(blob){
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result).split(",")[1]);
+      reader.onerror=()=>reject(new Error("檔案讀取失敗"));
+      reader.readAsDataURL(blob);
+    });
+  }
+  async function makeReferencePNG(index){
+    const result=await getPageImage(index),origin=result.canvas;
+    const ratio=Math.min(1,768/Math.max(origin.width,origin.height));
+    const c=document.createElement("canvas");
+    c.width=Math.max(1,Math.round(origin.width*ratio));
+    c.height=Math.max(1,Math.round(origin.height*ratio));
+    c.getContext("2d").drawImage(origin,0,0,c.width,c.height);
+    return fileToBase64(await new Promise(resolve=>c.toBlob(resolve,"image/png")));
+  }
+  async function generateAIClip(){
+    const p=state.pages[state.selected],kind=ui.engine.value;
+    if(!p||state.playing||state.clipBusy||!kind)return;
+    const installed=state.engineStatus?.engines.find(e=>e.id===kind);
+    if(!state.engineStatus?.comfyui_ready||!installed?.workflow_ready){
+      ui.clipStatus.textContent="請先啟動 ComfyUI、安裝對應模型並配置可信 API 工作流。";
+      return;
+    }
+    if((kind==="musetalk"||kind==="sadtalker")&&!p.audioURL){
+      ui.clipStatus.textContent="數位人口播必須先為目前頁面產生 Edge-TTS 音檔。";return;
+    }
+    const reference=ui.reference.files[0];
+    if((kind==="musetalk"||kind==="sadtalker")&&!reference){
+      ui.clipStatus.textContent="數位人口播請先選擇擁有肖像授權的人物 PNG 參考圖。";return;
+    }
+    if(reference&&(reference.type!=="image/png"||reference.size>8_000_000)){
+      ui.clipStatus.textContent="人物參考圖必須為不超過 8 MB 的 PNG。";return;
+    }
+    state.clipBusy=true;setBusy(true);
+    const current=state.selected;
+    try{
+      ui.clipStatus.textContent="正在準備 "+kind+" 參考素材…";
+      const body={
+        engine:kind,prompt:ui.clipPrompt.value.trim(),
+        image_base64:reference?await fileToBase64(reference):await makeReferencePNG(current)
+      };
+      if(kind!=="wan22")body.audio_base64=await fileToBase64(await (await fetch(p.audioURL)).blob());
+      const res=await api("/api/engine/render",body);
+      if(!res.job_id)throw new Error("ComfyUI 未提供任務代碼");
+      const jobId=res.job_id;
+      ui.clipStatus.textContent="ComfyUI 已排入工作，任務 "+jobId+"；視顯示卡可能需要數分鐘。";
+      let complete=false;
+      // Job polling is driven by the open browser, not a background assistant.
+      for(let attempt=0;attempt<180;attempt++){
+        await new Promise(resolve=>setTimeout(resolve,5000));
+        const r=await fetch(LOCAL+"/api/engine/job?id="+encodeURIComponent(jobId),{cache:"no-store"});
+        const job=await r.json();
+        if(!r.ok||job.status==="failed")throw new Error(job.error||"ComfyUI 生成失敗");
+        if(job.status==="completed"){
+          if(!job.output)throw new Error(job.error||"沒有取得 MP4/WebM 影片檔");
+          complete=true;break;
+        }
+        ui.clipStatus.textContent="AI 影片正在製作…已檢查 "+(attempt+1)+" 次（ComfyUI 任務："+jobId+"）";
+      }
+      if(!complete)throw new Error("等候逾時，可在 ComfyUI 檢查任務狀態");
+      const response=await fetch(LOCAL+"/api/engine/output?id="+encodeURIComponent(jobId));
+      if(!response.ok)throw new Error("ComfyUI 完成，但影片下載失敗");
+      const blob=await response.blob();
+      if(blob.size<2000)throw new Error("AI 影片內容為空");
+      const url=URL.createObjectURL(blob);
+      const video=document.createElement("video");
+      video.src=url;video.muted=true;video.loop=true;video.playsInline=true;video.preload="auto";
+      await new Promise((resolve,reject)=>{
+        video.onloadeddata=resolve;video.onerror=()=>reject(new Error("瀏覽器無法解碼產出的影片格式"));
+        video.load();
+      });
+      if(p.clipURL)URL.revokeObjectURL(p.clipURL);
+      p.clipURL=url;p.clipEl=video;
+      ui.clipStatus.textContent="AI 影片已生成並加入第 "+p.index+" 頁，預覽和 WebM 匯出會顯示「AI 生成示意」標記。";
+      drawTimeline();
+      if(current===state.selected)drawScene(current,0);
+    }catch(e){
+      ui.clipStatus.textContent="AI 生成未完成："+e.message+"。請檢查 ComfyUI、模型及工作流。";
+    }finally{state.clipBusy=false;setBusy(false);}
+  }
+
   ui.file.addEventListener("change",e=>{if(e.target.files[0])loadPDF(e.target.files[0]);});
   ui.title.addEventListener("input",()=>{if(!state.playing)drawScene(state.selected,0);});
   ui.mode.addEventListener("change",()=>{
@@ -465,7 +595,10 @@
   ui.stop.addEventListener("click",stopPlayback);
   window.addEventListener("beforeunload",()=>{for(const p of state.pages)revokeAudio(p);if(state.bgmURL)URL.revokeObjectURL(state.bgmURL);});
   if(typeof pdfjsLib!=="undefined")pdfjsLib.GlobalWorkerOptions.workerSrc="../pdf-voice-video/lib/pdf.worker.min.js";
-  ui.health.addEventListener("click",checkHealth);
-  window.addEventListener("focus",checkHealth);
-  drawScene(0,0);checkHealth();
+  ui.engineCheck.addEventListener("click",checkAIEngine);
+  ui.engine.addEventListener("change",updateUI);
+  ui.clipGenerate.addEventListener("click",generateAIClip);
+  ui.health.addEventListener("click",()=>{checkHealth().then(checkAIEngine);});
+  window.addEventListener("focus",()=>{checkHealth().then(checkAIEngine);});
+  drawScene(0,0);checkHealth().then(checkAIEngine);
 })();
