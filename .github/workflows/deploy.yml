@@ -119,6 +119,13 @@ jobs:
           python3 -m py_compile pdf-ai-video-studio/local-service/server.py
           python3 -m unittest discover -s pdf-ai-video-studio/tests -p 'test_*.py' -v
 
+      - name: Build Windows PDF AI Studio GUI launcher
+        run: |
+          mkdir -p pdf-ai-video-studio/desktop-build
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -H=windowsgui" -o pdf-ai-video-studio/desktop-build/啟動PDF智慧影音.exe pdf-ai-video-studio/desktop/launcher.go
+          test -s pdf-ai-video-studio/desktop-build/啟動PDF智慧影音.exe
+          echo "Windows GUI launcher built."
+
       - name: Assemble deploy site
         run: |
           rm -rf deploy
@@ -140,6 +147,38 @@ jobs:
           cp -r pdf-voice-video/* deploy/pdf-voice-video/
           # New PDF AI Studio: STATIC ONLY. Do not ship local-service/.env or Python backend.
           cp pdf-ai-video-studio/index.html pdf-ai-video-studio/app.js pdf-ai-video-studio/style.css deploy/pdf-ai-video-studio/
+          # Make a portable download. Exclude secrets, model weights, venv, test files.
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root=Path('pdf-ai-video-studio')
+          output=Path('deploy/pdf-ai-video-studio/pdf-ai-video-studio-desktop.zip')
+          files=[
+            'index.html', 'app.js', 'style.css', 'README.md',
+            'local-service/server.py', 'local-service/engine_service.py',
+            'local-service/requirements.txt','local-service/.env.example',
+            'local-service/start.bat','local-service/start.sh',
+            'local-service/workflows/README.md'
+          ]
+          with ZipFile(output,'w',ZIP_DEFLATED,compresslevel=9) as z:
+              z.write('pdf-ai-video-studio/desktop-build/啟動PDF智慧影音.exe',arcname='啟動PDF智慧影音.exe')
+              for name in files:
+                  p=root/name
+                  assert p.is_file(), f'Missing desktop file: {name}'
+                  z.write(p,arcname=str(Path('pdf-ai-video-studio')/name))
+              for name in ('pdf.min.js','pdf.worker.min.js'):
+                  p=Path('pdf-voice-video/lib')/name
+                  assert p.is_file(), f'Missing PDF library: {name}'
+                  z.write(p,arcname=str(Path('pdf-voice-video/lib')/name))
+          with ZipFile(output) as z:
+              assert z.testzip() is None
+              names=set(z.namelist())
+              assert '啟動PDF智慧影音.exe' in names
+              assert 'pdf-ai-video-studio/local-service/server.py' in names
+              assert 'pdf-voice-video/lib/pdf.min.js' in names
+              assert not any(name.endswith('/.env') or '/.venv/' in name or '/models/' in name for name in names)
+          print('PDF AI Studio Windows ZIP:',output,output.stat().st_size,'bytes')
+          PY
           # mobile remote assist frontend; signaling and token issuance remain server-side
           cp -r mobile-remote-assist/* deploy/mobile-remote-assist/
           # image-audit built assets (base: /original-tools/image-audit/)
