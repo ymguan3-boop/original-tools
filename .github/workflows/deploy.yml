@@ -84,6 +84,12 @@ jobs:
       - name: Test original-file input parity and desktop forensic report
         run: node image-audit/tests/test-preprocessing-parity.cjs
 
+      - name: Test percentage definitions and parameter tables on three interfaces
+        run: node image-audit/tests/test-parameter-guide.cjs
+
+      - name: Validate PRIVATE benchmark runner syntax (real photos remain local)
+        run: python3 -m py_compile image-audit/tests/private_photo_benchmark.py
+
       - name: Test Windows desktop HTTP route handling
         env:
           GO111MODULE: "off"
