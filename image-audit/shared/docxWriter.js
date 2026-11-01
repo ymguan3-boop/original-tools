@@ -117,8 +117,8 @@ async function create(input) {
  T('產製日期：'+date+'　｜　稽核組數：'+rows.length,'<w:color w:val="475569"/>')+
  T('分析引擎：'+(input.engine||'瀏覽器本機影像比對'),'<w:color w:val="475569"/>')+
  T('本報告之相似度為查核線索，非違規機率；請核對工程日誌、拍攝日期、契約及驗收資料。','<w:color w:val="64748B"/>')+
- T('【查核摘要】入選 '+rows.length+' 組｜幾何高度疑似 '+rows.filter(r=>r.geometryStatus==='verified').length+' 組｜跨門檻補列 '+rows.filter(r=>r.geometryRescued).length+' 組｜原檔完全相同 '+rows.filter(r=>r.geometryStatus==='byte-identical').length+' 組','<w:b/><w:color w:val="24486B"/>')+
- T('【判讀說明】快速分數與影像同源證據是不同指標，低分並不代表不同照片。下列證據圖只標示幾何對應與差異，請審計人員查核原始檔及施工紀錄。','<w:color w:val="64748B"/>');
+ T('【查核摘要】入選 '+rows.length+' 組｜'+(rows.some(r=>r.geometryStatus!=null)?('幾何高度疑似 '+rows.filter(r=>r.geometryStatus==='verified').length+' 組｜跨門檻補列 '+rows.filter(r=>r.geometryRescued).length+' 組｜原檔完全相同 '+rows.filter(r=>r.geometryStatus==='byte-identical').length+' 組'):'幾何驗證：本快速版未執行；請使用桌面版精查'),'<w:b/><w:color w:val="24486B"/>')+
+ T('【判讀說明】快速分數與影像同源證據是不同指標；'+(rows.some(r=>r.geometryStatus!=null)?'照片組別若有證據圖，僅顯示局部幾何對應與差異。':'網頁版不提供 RANSAC 內點、SSIM 或幾何證據圖，不能將未執行的功能當作 0 組證據。')+'請核對原始檔與施工紀錄。','<w:color w:val="64748B"/>');
  const doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
  '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>'+prefix+body+
  '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="900" w:right="1000" w:bottom="900" w:left="1000" w:header="500" w:footer="500"/></w:sectPr></w:body></w:document>';
