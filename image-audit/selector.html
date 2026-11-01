@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>選擇版本｜工程照片 AI 交叉稽核系統 v2.5.0</title>
+<title>選擇版本｜工程照片 AI 交叉稽核系統 v2.5.1</title>
 <meta name="description" content="選擇 DINOv2 離線桌面版或免安裝的線上交叉稽核版。">
 <style>
 :root{font-family:"Microsoft JhengHei","PingFang TC",system-ui,sans-serif;color:#10213c;background:#f3f6fc}
@@ -48,26 +48,26 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
 <body><main class="wrap">
 <a class="back" href="../">← 返回原創工具集</a>
 <h1>工程照片 AI 交叉稽核系統</h1>
-<p class="sub">目前版本 v2.5.0（2026-10-31）。兩版皆直接由原始照片計算同一套共同視覺分數；桌面版額外提供 DINOv2、FAST／BRIEF 特徵點、RANSAC 幾何驗證、對齊後 SSIM 及差異熱區。</p>
+<p class="sub">目前版本 v2.5.1（2026-10-31）。兩版皆直接由原始照片計算同一套共同視覺分數；桌面版額外提供 DINOv2、FAST／BRIEF 特徵點、RANSAC 幾何驗證、對齊後 SSIM 及差異熱區。</p>
 <div class="grid">
 <section class="card">
-<div class="symbol" aria-hidden="true">⬇</div><h2>下載桌面版 v2.5.0</h2>
-<span class="tag">DINOv2 + FAST/BRIEF + RANSAC + SSIM · v2.5.0</span>
+<div class="symbol" aria-hidden="true">⬇</div><h2>下載桌面版 v2.5.1</h2>
+<span class="tag">DINOv2 + FAST/BRIEF + RANSAC + SSIM · v2.5.1</span>
 <small>適合需針對疑似同源照片進行局部特徵匹配、幾何一致性、對齊 SSIM 與差異熱區查核；按下「開始分析」就執行 DINOv2、局部 FAST／BRIEF、RANSAC、對齊 SSIM 等所有本機辨識；DOCX 匯出僅讀取已完成的結果。</small>
 <ul><li>Windows ZIP，內含 DINOv2 模型與執行檔。</li><li>下載後完整解壓至新的資料夾，雙擊「啟動工程照片稽核.exe」自動開啟瀏覽器；請勿與舊版檔案混用。</li><li>免安裝 Python / Node.js；影像推論不需網路。</li><li>需保留啟動程式視窗，並留意 Windows 未簽章程式提示。</li><li><strong>ZIP 中的 index.html 是介面核心檔案，請勿刪除。</strong></li></ul>
 <a class="btn" download="image-audit-desktop-dinov2.zip" href="./image-audit-desktop-dinov2.zip">下載 DINOv2 桌面版 ZIP</a><a class="guide-link" href="#desktop-guide">查看完整安裝與操作說明 ↓</a>
 </section>
 <section class="card">
 <div class="symbol" aria-hidden="true">🌐</div><h2>使用線上版</h2>
-<span class="tag">共同視覺快速版 v2.5.0 · 無需下載模型</span>
-<small>適合即時初篩工程照片；v2.5.0 改由原始檔取樣計分，壓縮縮圖只供顯示，避免與桌面版的共同分數不一致。</small>
+<span class="tag">共同視覺快速版 v2.5.1 · 無需下載模型</span>
+<small>適合即時初篩工程照片；v2.5.1 改由原始檔取樣計分，壓縮縮圖只供顯示，避免與桌面版的共同分數不一致。</small>
 <ul><li>透過瀏覽器開啟，不需下載或安裝。</li><li>使用共同視覺分數（pHash、dHash、明暗結構、邊緣及位移校正），不載入大型 AI 模型。</li><li>支援多資料夾交叉比對、差異說明、DOCX / CSV 匯出。</li><li>照片在瀏覽器處理；可選擇使用需連網的 AI 文字解說。</li></ul>
 <a class="btn" href="./">開啟線上版</a>
 </section>
 </div>
 <section class="guide" id="desktop-guide" aria-labelledby="desktop-guide-title">
-<div class="guide-head"><div class="symbol" aria-hidden="true">📘</div><div><h2 id="desktop-guide-title">Windows 桌面版 v2.5.0｜安裝與操作說明</h2><small>免額外安裝 Python、Node.js 或本機伺服器｜適用 Windows 10 / 11</small></div></div>
-<p class="intro">請重新下載 v2.5.0 ZIP 並完整解壓縮到新資料夾，不要覆蓋或混用舊版。雙擊 EXE 後在瀏覽器操作；按「開始分析」即完整執行全部跨批次配對辨識，匯出 DOCX 不需重新分析。</p>
+<div class="guide-head"><div class="symbol" aria-hidden="true">📘</div><div><h2 id="desktop-guide-title">Windows 桌面版 v2.5.1｜安裝與操作說明</h2><small>免額外安裝 Python、Node.js 或本機伺服器｜適用 Windows 10 / 11</small></div></div>
+<p class="intro">請重新下載 v2.5.1 ZIP 並完整解壓縮到新資料夾，不要覆蓋或混用舊版。雙擊 EXE 後在瀏覽器操作；按「開始分析」即完整執行全部跨批次配對辨識，匯出 DOCX 不需重新分析。</p>
 <div class="steps">
  <article class="step"><h3>下載並完整解壓縮</h3><p>點選上方「下載 DINOv2 桌面版 ZIP」，在檔案總管右鍵選擇「解壓縮全部」到全新資料夾；避免舊版 JS 與模型檔混用。<strong>不要直接在 ZIP 內執行 EXE</strong>，也不要將 EXE 單獨移出資料夾。</p></article>
  <article class="step"><h3>雙擊啟動程式</h3><p>開啟解壓縮後的資料夾，雙擊 <code>啟動工程照片稽核.exe</code>。程式會啟動本機服務，並自動開啟預設瀏覽器（建議 Chrome 或 Edge）。</p></article>
@@ -97,13 +97,13 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
 <tr><td class="param-name">重疊率／差異區域</td><td>僅桌面</td><td>標記幾何映射的有效影像範圍及超過閾值的灰階差異</td><td>重疊率＝有效對齊像素數／兩圖有效像素數較小值 × 100%；差異比例＝亮度差大於 32 的像素／有效像素 × 100%</td><td>揭露局部驗證範圍；重疊率 100% 不代表影像完全相同</td></tr>
 <tr><td class="param-name">MobileSAM／YOLO</td><td>兩版均未加入</td><td>物件分割／辨識，非本次必要功能</td><td>未執行，不應顯示百分比</td><td>將來有指定物件數量或輪廓需求才評估</td></tr></tbody></table></div>
 <div class="guide-note"><b>判讀提醒：</b>網頁版以速度為優先，桌面版對全批次配對進行局部幾何驗證。低於共同視覺門檻但符合局部幾何條件者可在桌面版補列。SIFT-style 不是完整 OpenCV SIFT；RANSAC 的「內點比例」不是重複請款機率。OpenRouter 僅於使用者主動同意時作為可見內容說明。</div>
-<h3 class="subhead">v2.5.0｜全照片自動進階查核與報告升級</h3>
+<h3 class="subhead">v2.5.1｜全照片自動進階查核與報告升級</h3>
 <div class="steps">
  <article class="step"><h3>網頁版／免安裝 HTML 版</h3><p>修復以 390px JPEG 縮圖計算相似度造成的偏差，改由原始照片解碼後取樣。縮圖仍僅用於顯示及報告。保留快速 pHash、dHash、結構、邊緣與位置校正，不加入 DINOv2、SAM、YOLO。</p></article>
  <article class="step"><h3>Windows DINOv2 桌面版</h3><p>保留 DINOv2-small 及可用時的局部 Patch 特徵；搭配 FAST／方向 BRIEF、RANSAC、SSIM、差異熱區與 SHA-256。按「開始分析」即對全部跨批次照片執行進階辨識；DOCX 僅輸出已入選的可疑組別及實際驗證數值；不需要 Python 或 Node.js。</p></article>
 </div>
-<div class="guide-note"><strong>版本確認：</strong>請檢查首頁顯示 <b>v2.5.0</b>，DOCX 報告「分析引擎」亦應標示 v2.5.0 及本次門檻。若看到 v2.2 或只有 DINOv2 分數，請刪除舊解壓縮資料夾後重新下載；此版本沒有內建 MobileSAM / YOLO，也不是 OpenCV ORB 完整版。照片相似度仍不是違規機率。</div>
-<div class="guide-note"><b>v2.5.0 照片同源辨識：</b>兩版都加入保守去白邊、多區域裁切比對。桌面版會對每組跨批次照片先執行 FAST／BRIEF + RANSAC，若仍缺乏足夠幾何證據，再以多尺度 SIFT-style 128 維梯度描述子補強，並顯示有效影像重疊率及特徵點連線、差異熱區。SIFT-style 為自有輕量近似方案，<strong>不是完整 OpenCV SIFT</strong>；不增加下載模型或使用者的 Python 安裝負擔。快速分數與影像同源判讀分開，不能作為違規判定。</div>
+<div class="guide-note"><strong>版本確認：</strong>請檢查首頁顯示 <b>v2.5.1</b>，DOCX 報告「分析引擎」亦應標示 v2.5.1 及本次門檻。若看到 v2.2 或只有 DINOv2 分數，請刪除舊解壓縮資料夾後重新下載；此版本沒有內建 MobileSAM / YOLO，也不是 OpenCV ORB 完整版。照片相似度仍不是違規機率。</div>
+<div class="guide-note"><b>v2.5.1 照片同源辨識：</b>兩版都加入保守去白邊、多區域裁切比對。桌面版會對每組跨批次照片先執行 FAST／BRIEF + RANSAC，若仍缺乏足夠幾何證據，再以多尺度 SIFT-style 128 維梯度描述子補強，並顯示有效影像重疊率及特徵點連線、差異熱區。SIFT-style 為自有輕量近似方案，<strong>不是完整 OpenCV SIFT</strong>；不增加下載模型或使用者的 Python 安裝負擔。快速分數與影像同源判讀分開，不能作為違規判定。</div>
 <h3 class="subhead">常見問題與資訊安全提醒</h3>
 <div class="faq">
  <details><summary>為什麼雙擊 EXE 後會開啟瀏覽器？可以刪掉 HTML 嗎？</summary><p>EXE 只負責在自己的電腦啟動本機 HTTP 服務（<code>127.0.0.1</code> 隨機連接埠）；真正的操作畫面由 <code>index.html</code> 和其他資源提供。因此 HTML 必須保留，不能單獨刪除。</p></details>
