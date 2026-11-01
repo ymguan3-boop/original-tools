@@ -72,7 +72,8 @@
         <option value="musetalk">MuseTalk · 人物嘴型同步</option>
         <option value="sadtalker">SadTalker · 照片數位人</option>
       </select>
-      <button class="btn" id="engineCheck">檢查 Python／ComfyUI／GPU／模型</button>
+      <button class="btn" id="engineCheck">重新檢查 CPU／RAM／GPU／模型</button>
+      <div id="hardwarePreflight" role="status" class="hardware-preflight">CPU、RAM、GPU 與磁碟資訊會在 Windows EXE 啟動時先檢查；尚未取得結果。</div>
       <div class="dependency-guide" aria-label="本機環境檢查結果">
         <div class="dependency-item"><span><strong>Python 執行環境</strong><small id="pythonStatus">等待檢查…</small></span><a target="_blank" rel="noopener noreferrer" href="https://www.python.org/downloads/windows/">Python 官方下載</a></div>
         <div class="dependency-item"><span><strong>ComfyUI（進階功能選裝）</strong><small id="comfyStatus">等待檢查…</small></span><a target="_blank" rel="noopener noreferrer" href="https://www.comfy.org/download">ComfyUI 官方下載</a></div>
@@ -127,6 +128,7 @@
       <section class="setup-step">
         <h3><span>1</span> 基本環境（必要）</h3>
         <p id="setupBasicStatus" class="hint">正在確認本機服務、PDF.js、瀏覽器的 WebM/Audio 能力。</p>
+        <div id="setupHardwareStatus" role="status" class="hardware-preflight">啟動器會檢查 CPU 核心、記憶體、GPU／VRAM 與剩餘磁碟空間。</div>
         <button type="button" id="setupRefresh" class="btn">重新檢查所有環境</button>
         <p class="hint">如果 EXE 找不到 Python，請先依跳出的視窗到 <a target="_blank" rel="noopener noreferrer" href="https://www.python.org/downloads/windows/">Python 官方網站</a>安裝，再重新雙擊 EXE。如果瀏覽器不支援錄影，請安裝 <a target="_blank" rel="noopener noreferrer" href="https://www.microsoft.com/edge/download">Microsoft Edge</a>。</p>
       </section>
