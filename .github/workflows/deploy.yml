@@ -90,6 +90,9 @@ jobs:
       - name: Validate PRIVATE benchmark runner syntax (real photos remain local)
         run: python3 -m py_compile image-audit/tests/private_photo_benchmark.py
 
+      - name: Synthetic private-benchmark manifest and DOCX parser test
+        run: python3 image-audit/tests/test-private-benchmark.py
+
       - name: Test Windows desktop HTTP route handling
         env:
           GO111MODULE: "off"
