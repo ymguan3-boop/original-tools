@@ -42,6 +42,78 @@ def config():
         if k in os.environ:d[k]=os.environ[k]
     return d
 def ready(d):return bool(d.get("LLM_BASE_URL") and d.get("LLM_MODEL"))
+
+def config_status():
+    d=config()
+    return {
+        "configured":ready(d),
+        "base_url":d.get("LLM_BASE_URL",""),
+        "model":d.get("LLM_MODEL",""),
+        "has_api_key":bool(d.get("LLM_API_KEY")),
+    }
+
+def save_llm_config(body):
+    if not isinstance(body,dict):raise ValueError("設定資料格式錯誤")
+    base=body.get("base_url","")
+    model=body.get("model","")
+    key=body.get("api_key","")
+    keep=body.get("keep_existing_key",True)
+    if not isinstance(base,str) or not isinstance(model,str) or not isinstance(key,str):
+        raise ValueError("LLM 設定需為文字")
+    base=base.strip().rstrip("/")
+    model=model.strip()
+    if not valid_url(base) or not 1<=len(model)<=128 or not all(c not in model for c in "\r\n<>"):
+        raise ValueError("端點必須使用 HTTPS 或本機 HTTP；請填有效模型名稱")
+    if len(key)>1024 or any(x in key for x in "\r\n"):
+        raise ValueError("API Key 格式錯誤")
+    if not isinstance(keep,bool):raise ValueError("金鑰保留選項錯誤")
+    old=config()
+    if not key and keep:key=old.get("LLM_API_KEY","")
+    if base.startswith("http://") and key:
+        raise ValueError("本機 HTTP 端點不得傳送 API Key；請使用 HTTPS")
+    path=ROOT/".env"
+    contents="\n".join([
+        "# PDF AI Studio local credentials. Do not commit to GitHub.",
+        "LLM_BASE_URL="+base,
+        "LLM_MODEL="+model,
+        "LLM_API_KEY="+key,
+        ""
+    ])
+    import tempfile
+    temp_path=None
+    try:
+        with tempfile.NamedTemporaryFile("w",encoding="utf-8",dir=ROOT,prefix=".studio-",suffix=".tmp",delete=False) as out:
+            temp_path=Path(out.name)
+            out.write(contents)
+        if os.name!="nt":os.chmod(temp_path,0o600)
+        os.replace(temp_path,path)
+    finally:
+        if temp_path is not None and temp_path.exists():temp_path.unlink()
+    return config_status()
+
+def test_llm_config():
+    import httpx
+    d=config()
+    if not ready(d):raise ValueError("請先儲存 LLM 端點和模型")
+    base=d["LLM_BASE_URL"].strip().rstrip("/")
+    if not valid_url(base):raise ValueError("LLM 端點格式不正確")
+    headers={"Content-Type":"application/json"}
+    if d.get("LLM_API_KEY"):headers["Authorization"]="Bearer "+d["LLM_API_KEY"]
+    try:
+        with httpx.Client(timeout=30,follow_redirects=False,trust_env=False) as client:
+            result=client.post(base+"/chat/completions",headers=headers,json={
+                "model":d["LLM_MODEL"],"messages":[{"role":"user","content":"請只回答 OK"}],"max_tokens":16
+            })
+            result.raise_for_status()
+            response=result.json()
+            if not response.get("choices"):
+                raise ValueError("服務沒有回傳符合 OpenAI Chat Completions 格式的 choices")
+            return {"ready":True,"message":"LLM 連線測試成功"}
+    except httpx.HTTPStatusError as err:
+        raise ValueError("LLM 服務回應 HTTP "+str(err.response.status_code)) from err
+    except (httpx.RequestError,ValueError,KeyError,TypeError) as err:
+        raise ValueError("LLM 測試未通過，請確認模型名稱、金鑰及網路") from err
+
 def valid_url(url):
     x=urlsplit(url)
     if x.username or x.password or x.query or x.fragment:return False
@@ -117,6 +189,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length",str(len(data)))
         self.send_header("Cache-Control","no-store")
         self.send_header("X-Content-Type-Options","nosniff")
+        self.send_header("X-Frame-Options","DENY")
         origin=self.headers.get("Origin")
         if origin in ORIGINS:
             self.send_header("Access-Control-Allow-Origin",origin)
@@ -140,6 +213,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length",str(len(data)))
         self.send_header("Cache-Control","no-store")
         self.send_header("X-Content-Type-Options","nosniff")
+        self.send_header("X-Frame-Options","DENY")
         origin=self.headers.get("Origin")
         if origin in ORIGINS:
             self.send_header("Access-Control-Allow-Origin",origin)
@@ -156,6 +230,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_binary(mime,path.read_bytes());return
         if endpoint=="/health":
             self.send_json(200,{"ok":True,"llm_ready":ready(config()),"tts_ready":True,"desktop":True});return
+        if endpoint=="/api/setup/llm-config":
+            self.send_json(200,config_status());return
         try:
             if endpoint=="/api/engine/status":
                 self.send_json(200,engine_service.status());return
@@ -172,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(404,{"error":"Not found"})
     def do_POST(self):
         if not self.allowed():self.send_json(403,{"error":"Origin forbidden"});return
-        if self.path not in ("/api/llm","/api/tts","/api/engine/render"):self.send_json(404,{"error":"Not found"});return
+        if self.path not in ("/api/llm","/api/tts","/api/engine/render","/api/setup/llm-config","/api/setup/llm-test"):self.send_json(404,{"error":"Not found"});return
         if not self.headers.get("Content-Type","").startswith("application/json"):
             self.send_json(415,{"error":"JSON required"});return
         try:
@@ -182,6 +258,8 @@ class Handler(BaseHTTPRequestHandler):
             body=json.loads(self.rfile.read(size).decode("utf-8"))
             if not isinstance(body,dict):raise ValueError("JSON 格式錯誤")
             if self.path=="/api/llm":out=llm(body)
+            elif self.path=="/api/setup/llm-config":out=save_llm_config(body)
+            elif self.path=="/api/setup/llm-test":out=test_llm_config()
             elif self.path=="/api/engine/render":out=engine_service.queue(body)
             else:
                 text=body.get("text");voice=body.get("voice")
