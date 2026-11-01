@@ -7,6 +7,9 @@
     file:$("pdfFile"),info:$("fileInfo"),title:$("movieTitle"),mode:$("scriptMode"),
     aiOptions:$("aiOptions"),style:$("narrativeStyle"),seconds:$("targetSeconds"),
     scripts:$("generateScripts"),audio:$("generateAudio"),voice:$("voiceSelect"),
+    voiceMode:$("voiceMode"),edgeVoice:$("edgeVoiceOptions"),cloneOptions:$("cloneVoiceOptions"),
+    cloneReference:$("cloneReference"),cloneConsent:$("cloneConsent"),cloneUpload:$("cloneUpload"),
+    clonePreview:$("clonePreview"),cloneStatus:$("cloneStatus"),
     music:$("enableBgm"),bgm:$("bgmFile"),volume:$("bgmVolume"),volumeLabel:$("volumeLabel"),
     template:$("templateSelect"),aspect:$("aspectSelect"),preview:$("videoCanvas"),
     scenes:$("sceneList"),count:$("sceneCount"),editor:$("scriptEditor"),
@@ -25,7 +28,8 @@
     doc:null,pages:[],selected:0,cache:new Map(),title:"",bgmURL:null,
     service:false,busy:false,playing:false,session:0,playingPage:0,
     voice:null,music:null,ctx:null,recorder:null,stream:null,raf:0,
-    clockOffset:0,sceneTimer:null,engineStatus:null,clipBusy:false
+    clockOffset:0,sceneTimer:null,engineStatus:null,clipBusy:false,
+    cloneToken:null,cloneHealth:null,cloneBusy:false
   };
   const ctx = ui.preview.getContext("2d",{alpha:false});
   function say(msg,bad) { ui.log.textContent=(bad?"⚠ ":"✓ ")+msg; ui.log.style.borderColor=bad?"#ffb273":"#5db9f9"; }
@@ -51,13 +55,18 @@
     const ready=state.pages.length>0&&!state.busy&&!state.playing;
     ui.aiOptions.hidden=ui.mode.value!=="ai";
     ui.scripts.disabled=!ready||!state.service||ui.mode.value!=="ai";
-    ui.audio.disabled=!ready||!state.service||!state.pages.some(p=>clean(p.script));
+    ui.audio.disabled=!ready||!state.service||!state.pages.some(p=>clean(p.script))||
+      (ui.voiceMode.value==="indextts"&&(!state.cloneToken||!ui.cloneConsent.checked));
     ui.editor.disabled=!ready;
     ui.restore.disabled=!ready;
     ui.download.disabled=!ready;
     ui.play.disabled=!ready||!hasAudio();
     ui.export.disabled=!ready||!hasAudio()||!window.MediaRecorder||!ui.preview.captureStream;
     ui.stop.disabled=!state.playing;
+    ui.edgeVoice.hidden=ui.voiceMode.value!=="edge";
+    ui.cloneOptions.hidden=ui.voiceMode.value!=="indextts";
+    ui.cloneUpload.disabled=state.busy||state.cloneBusy||!state.service||!ui.cloneConsent.checked||!ui.cloneReference.files?.length;
+    ui.clonePreview.disabled=state.busy||state.cloneBusy||!state.service||!ui.cloneConsent.checked||!state.cloneToken;
     ui.clipGenerate.disabled=!ready||!state.service||!state.engineStatus?.comfyui_ready||!ui.engine.value||!state.engineStatus.engines.some(e=>e.id===ui.engine.value&&e.workflow_ready)||state.clipBusy;
     ui.aspect.disabled=state.playing;ui.template.disabled=state.playing;
     ui.bgm.disabled=!ui.music.checked;
@@ -312,22 +321,130 @@
       a.onerror=()=>{clearTimeout(timer);resolve(fallback);};a.src=url;
     });
   }
+  async function cloneStatusCheck(){
+    if(!state.service){
+      state.cloneHealth=null;
+      ui.cloneStatus.textContent="本機服務尚未啟動，請重新雙擊桌面 EXE。";
+      updateUI();return;
+    }
+    try{
+      const r=await fetch(LOCAL+"/api/voice-clone/status",{cache:"no-store"});
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.error||"ComfyUI 檢查失敗");
+      state.cloneHealth=d;
+      if(!d.comfyui_ready){
+        ui.cloneStatus.textContent="未連線 ComfyUI（127.0.0.1:8188）；若已安裝，請先啟動。";
+      }else if(!d.nodes_ready){
+        ui.cloneStatus.textContent="ComfyUI 已連線，但缺少："+d.missing_nodes.join("、")+"。請先安裝相容 Index-TTS2 自訂節點。";
+      }else{
+        ui.cloneStatus.textContent=state.cloneToken
+          ?"✓ 參考聲線已上傳；模型節點存在。請按「試聽自訂聲線」驗證模型權重。"
+          :"✓ ComfyUI 與 Index-TTS2 節點已可連線；模型權重仍需透過試聽確認。";
+      }
+    }catch(e){
+      state.cloneHealth=null;ui.cloneStatus.textContent="聲音複製環境檢查失敗："+e.message;
+    }
+    updateUI();
+  }
+  function resetCloneReference(){
+    state.cloneToken=null;
+    changeAllAudio();
+    ui.cloneStatus.textContent="參考錄音已變更，請重新上傳並試聽。";
+    updateUI();
+  }
+  async function uploadCloneReference(){
+    const file=ui.cloneReference.files?.[0];
+    if(!file||!ui.cloneConsent.checked||!state.service||state.cloneBusy)return;
+    if(file.size<1024||file.size>8*1024*1024){
+      ui.cloneStatus.textContent="參考聲音檔必須介於 1KB 至 8MB。";return;
+    }
+    if(!/\.(wav|mp3|flac)$/i.test(file.name)){
+      ui.cloneStatus.textContent="請提供 WAV、MP3 或 FLAC 檔。";return;
+    }
+    state.cloneBusy=true;updateUI();
+    try{
+      ui.cloneStatus.textContent="正在檢查 ComfyUI 自訂節點，並上傳授權錄音到本機 ComfyUI…";
+      const result=await api("/api/voice-clone/reference",{
+        audio_base64:await fileToBase64(file),consent:ui.cloneConsent.checked
+      });
+      state.cloneToken=result.reference_token;
+      if(!state.cloneToken)throw new Error("伺服器未回傳有效聲線憑證");
+      ui.cloneStatus.textContent="✓ "+result.message+"。錄音與輸出會保留在 ComfyUI 資料夾。";
+    }catch(e){
+      state.cloneToken=null;ui.cloneStatus.textContent="參考錄音上傳失敗："+e.message;
+    }finally{state.cloneBusy=false;updateUI();}
+  }
+  async function synthesizeCloned(text){
+    if(!state.cloneToken||!ui.cloneConsent.checked)throw new Error("請先上傳並確認有權使用的聲音樣本");
+    if(text.length>600)throw new Error("Index-TTS2 每頁最多 600 字；請先精簡逐頁文案");
+    const queued=await api("/api/voice-clone/render",{
+      reference_token:state.cloneToken,text,consent:ui.cloneConsent.checked
+    });
+    if(!queued.job_id)throw new Error("ComfyUI 沒有提供任務編號");
+    let ready=false;
+    for(let i=0;i<180;i++){
+      await new Promise(resolve=>setTimeout(resolve,4000));
+      const response=await fetch(LOCAL+"/api/voice-clone/job?id="+encodeURIComponent(queued.job_id),{cache:"no-store"});
+      const job=await response.json();
+      if(!response.ok||job.status==="failed")throw new Error(job.error||"Index-TTS2 生成失敗");
+      if(job.status==="completed"){ready=true;break;}
+    }
+    if(!ready)throw new Error("Index-TTS2 等候超時；請檢查 ComfyUI 的生成任務");
+    const result=await fetch(LOCAL+"/api/voice-clone/audio?id="+encodeURIComponent(queued.job_id),{cache:"no-store"});
+    if(!result.ok){
+      let msg="無法讀取 Index-TTS2 生成音檔";
+      try{const d=await result.json();msg=d.error||msg;}catch(_){}
+      throw new Error(msg);
+    }
+    const audio=await result.blob();
+    if(audio.size<500)throw new Error("模型輸出音檔為空");
+    return audio;
+  }
+  async function previewCloneVoice(){
+    if(state.cloneBusy||!state.cloneToken)return;
+    state.cloneBusy=true;updateUI();
+    ui.cloneStatus.textContent="正在用本人授權錄音合成試聽內容（大型模型可能需要較久）…";
+    try{
+      const sample=await synthesizeCloned("您好，這是我的個人聲線測試。歡迎使用 PDF 智慧影音製作系統。");
+      const url=URL.createObjectURL(sample);
+      const player=new Audio(url);
+      player.onended=()=>URL.revokeObjectURL(url);
+      player.onerror=()=>URL.revokeObjectURL(url);
+      await player.play();
+      ui.cloneStatus.textContent="✓ Index-TTS2 已完成試聽音檔，請確認是否接近你的聲音。";
+    }catch(e){ui.cloneStatus.textContent="試聽失敗："+e.message;}
+    finally{state.cloneBusy=false;updateUI();}
+  }
   async function generateAudio(){
     if(!state.pages.length||state.busy||!state.service)return;
-    setBusy(true);say("正在用 Edge-TTS 逐頁產生語音…");
+    const cloned=ui.voiceMode.value==="indextts";
+    if(cloned&&(!state.cloneToken||!ui.cloneConsent.checked)){
+      say("請先上傳獲授權聲線，並完成聲線試聽。",true);return;
+    }
+    setBusy(true);say("正在用 "+(cloned?"Index-TTS2 自訂聲線":"Edge-TTS")+" 逐頁產生語音…");
     try{
       for(let i=0;i<state.pages.length;i++){
         const p=state.pages[i],text=clean(p.script);revokeAudio(p);
         if(!text){p.duration=1.2;continue;}
-        if(text.length>1800)throw new Error("第 "+p.index+" 頁旁白超過 1800 字，請縮短後再配音。");
-        const d=await api("/api/tts",{text,voice:ui.voice.value});
-        if(!d.audio_base64)throw new Error("第 "+p.index+" 頁無音訊");
-        p.audioURL=URL.createObjectURL(base64ToBlob(d.audio_base64,"audio/mpeg"));
-        p.audioText=text;p.words=Array.isArray(d.words)?d.words:[];
+        if(text.length>(cloned?600:1800)){
+          throw new Error("第 "+p.index+" 頁旁白超過 "+(cloned?600:1800)+" 字，請縮短後再配音。");
+        }
+        if(cloned){
+          say("Index-TTS2 正在生成第 "+p.index+" / "+state.pages.length+" 頁，請維持 ComfyUI 啟動…");
+          const blob=await synthesizeCloned(text);
+          p.audioURL=URL.createObjectURL(blob);
+          p.words=[];
+        }else{
+          const d=await api("/api/tts",{text,voice:ui.voice.value});
+          if(!d.audio_base64)throw new Error("第 "+p.index+" 頁無音訊");
+          p.audioURL=URL.createObjectURL(base64ToBlob(d.audio_base64,"audio/mpeg"));
+          p.words=Array.isArray(d.words)?d.words:[];
+        }
+        p.audioText=text;
         p.duration=await durationOf(p.audioURL,estimated(text));
         say("已產生語音 "+(i+1)+" / "+state.pages.length+" 頁");
       }
-      say("所有旁白音檔已完成，可直接播放或錄製，不需要分享螢幕音訊。");
+      say("所有旁白音檔已完成；可直接預覽，並匯出含自訂聲線的 WebM 影片。");
       drawTimeline();await chooseScene(state.selected);
     }catch(e){say("配音中止："+e.message,true);drawTimeline();}
     finally{setBusy(false);}
@@ -661,6 +778,7 @@
     try{
       await checkHealth();
       await checkAIEngine();
+      if(ui.voiceMode.value==="indextts")await cloneStatusCheck();
       renderSetupSummary();
       const st=state.engineStatus;
       const installed=st?.engines?.filter(e=>e.workflow_ready)||[];
@@ -732,6 +850,17 @@
     setSetupBusy(true);
     setup.voice.textContent="正在測試 Edge-TTS（須連網）…";
     try{
+      if(ui.voiceMode.value==="indextts"){
+        if(!state.cloneToken||!ui.cloneConsent.checked)throw new Error("請先關閉精靈，在「語音與背景音樂」上傳授權錄音。");
+        const blob=await synthesizeCloned("您好，這是我的個人聲線試聽。");
+        const url=URL.createObjectURL(blob);
+        const sound=new Audio(url);
+        sound.onended=()=>URL.revokeObjectURL(url);
+        await sound.play();
+        setup.voiceVerified=true;
+        setup.voice.textContent="✓ Index-TTS2 自訂聲線試聽成功。";
+        return;
+      }
       const d=await api("/api/tts",{text:"您好，歡迎使用 PDF 智慧影音製作系統。",voice:ui.voice.value});
       if(!d.audio_base64)throw new Error("沒有取得音檔");
       setup.voiceVerified=true;
@@ -772,7 +901,16 @@
   ui.download.addEventListener("click",downloadScripts);
   ui.scripts.addEventListener("click",generateScripts);
   ui.audio.addEventListener("click",generateAudio);
-  ui.voice.addEventListener("change",changeAllAudio);
+  ui.voice.addEventListener("change",()=>{if(ui.voiceMode.value==="edge")changeAllAudio();});
+  ui.voiceMode.addEventListener("change",()=>{
+    changeAllAudio();
+    updateUI();
+    if(ui.voiceMode.value==="indextts")cloneStatusCheck();
+  });
+  ui.cloneReference.addEventListener("change",resetCloneReference);
+  ui.cloneConsent.addEventListener("change",()=>{if(!ui.cloneConsent.checked)resetCloneReference();else updateUI();});
+  ui.cloneUpload.addEventListener("click",uploadCloneReference);
+  ui.clonePreview.addEventListener("click",previewCloneVoice);
   ui.music.addEventListener("change",()=>{ui.bgm.disabled=!ui.music.checked;ui.volume.disabled=!ui.music.checked;});
   ui.volume.addEventListener("input",()=>ui.volumeLabel.textContent=ui.volume.value+"%");
   ui.bgm.addEventListener("change",e=>{
@@ -786,7 +924,7 @@
   ui.stop.addEventListener("click",stopPlayback);
   window.addEventListener("beforeunload",()=>{for(const p of state.pages)revokeAudio(p);if(state.bgmURL)URL.revokeObjectURL(state.bgmURL);});
   if(typeof pdfjsLib!=="undefined")pdfjsLib.GlobalWorkerOptions.workerSrc="../pdf-voice-video/lib/pdf.worker.min.js";
-  ui.engineCheck.addEventListener("click",checkAIEngine);
+  ui.engineCheck.addEventListener("click",()=>{checkAIEngine();cloneStatusCheck();});
   ui.engine.addEventListener("change",updateUI);
   ui.clipGenerate.addEventListener("click",generateAIClip);
   ui.health.addEventListener("click",()=>{checkHealth().then(checkAIEngine);});
