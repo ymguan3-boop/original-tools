@@ -17,15 +17,31 @@
 
 **重要：** 這是「ZIP 可攜式桌面程式」，不是 MSI 安裝精靈。ZIP **未內建 Python**；Python 缺少時須由使用者自行安裝，不能只解壓 ZIP 就期待 Python 功能可執行。
 
-## 程式依賴項目與檢查方式
+## 程式依賴項目與檢查方式（2026-11-01 原始碼複核）
 
-| 項目 | 何時需要 | 如何檢查 | 若缺少 |
+**下載包真正內建：** Windows x64 Go 編譯的 EXE 啟動器、HTML / CSS / JavaScript、PDF.js 主程式與 Worker、本機 Python 服務的來源檔、requirements.txt、選裝 ComfyUI 接頭。**沒有**內建 Python 執行環境、FFmpeg、Chrome/Edge、Ollama、ComfyUI、PyTorch、CUDA Runtime 或模型權重。
+
+| 項目 | 必要性 | 現行檢測與處理 | 官方來源 |
 |---|---|---|---|
-| Python 3.10–3.14 | 本機 HTML 服務、AI 文案、Edge-TTS | EXE 啟動時偵測 Python 版本 | 會彈出視窗提供 [Python 官方 Windows 下載](https://www.python.org/downloads/windows/) |
-| edge-tts / httpx | 文字語音轉檔及 LLM | EXE 檢查獨立 venv 裡的套件 | 取得使用者同意後由 pip 安裝 |
-| ComfyUI | 只有 AI 影片／數位人選裝模型才需要 | HTML 工作台測試 127.0.0.1:8188 的本機 ComfyUI API | 顯示未連線，提供 [ComfyUI 官方下載](https://www.comfy.org/download) |
-| Wan2.2／MuseTalk／SadTalker 權重與 API 工作流 | 使用該模型時才需要 | HTML 顯示對應工作流是否就緒；須實際測試模型 | 依下方官方連結自行安裝與確認權重授權 |
+| Windows x64、Python 3.10–3.14 | **必要**，本機服務使用 | EXE 偵測 Python 版本；沒有時跳出官方安裝提示，首次在本程式資料夾建立獨立 venv | [Python Windows](https://www.python.org/downloads/windows/) |
+| venv / pip、edge-tts 7.2.7、httpx 0.28.x（含間接依賴） | **必要**，配音與 API | EXE 檢查套件；缺少時先詢問，再用 pip 安裝；需網路，若 Python 沒有 pip 或 venv，需修復 Python | [Python pip 文件](https://pip.pypa.io/) |
+| PDF.js | **必要但已隨 ZIP 打包** | 包含 pdf.min.js 與 pdf.worker.min.js；無需另外下載 | [PDF.js](https://mozilla.github.io/pdf.js/) |
+| Edge／Chrome 等支援 MediaRecorder 的瀏覽器 | **必要**，HTML、WebM 與 Web Audio | HTML 會檢查 Canvas、WebM、Web Audio；不相容時引導安裝現代瀏覽器 | [Microsoft Edge](https://www.microsoft.com/edge/download) |
+| FFmpeg 可執行檔 | **進階選用**：MuseTalk 官方直接推論／MP4 轉檔／部分 ComfyUI 節點 | 檢查 ffmpeg 命令是否存在於 PATH；一般 Canvas → WebM 匯出不需要獨立 FFmpeg | [FFmpeg 官方下載](https://ffmpeg.org/download.html) |
+| Ollama 與本機模型 | **選用**：只有本機 LLM 文案需要；可改用既有 Free LLM API | 偵測本機 127.0.0.1:11434 API 是否回應；API 有回應**不代表已下載指定模型** | [Ollama Windows](https://ollama.com/download/windows) |
+| ComfyUI | **選用**：AI 影片與數位人 | 偵測本機 127.0.0.1:8188 的 API；無回應可能尚未啟動，不能直接判定未安裝 | [ComfyUI 官方下載](https://www.comfy.org/download) |
+| NVIDIA 顯示卡驅動／顯存 | **依模型需求** | 用 nvidia-smi 取得 GPU 型號、VRAM、驅動版本；未偵測不等於所有 GPU 都不可用 | [NVIDIA 驅動](https://www.nvidia.com/zh-tw/drivers/) |
+| PyTorch、相容的 CUDA 執行環境、模型自訂節點 | **依 ComfyUI 工作流需求** | **尚不能由本程式保證安裝正確**，應在 ComfyUI 內對照模型／Torch／GPU 驅動並做實際推論；一般不需要為此另外裝完整 CUDA Toolkit | [ComfyUI 專案](https://github.com/comfy-org/ComfyUI) |
+| Git | **依第三方節點安裝流程選用**，一般使用者不需要 | 只檢查 git 命令是否存在於 PATH；不自動 clone 不明來源 | [Git Windows](https://git-scm.com/downloads/win) |
+| Wan2.2／MuseTalk／SadTalker 模型權重、API 工作流 | **進階選用** | 只檢查指定 API 工作流 JSON 是否存在；**不能保證模型權重、節點或授權已準備好** | 見下方官方模型來源 |
+| 可用磁碟空間 | **必要的資源條件** | 提供所在磁碟剩餘 GB 數作為提醒；模型可能需要數十 GB 空間，實際需求依模型／工作流不同 | 不需額外軟體 |
 
+**開發時需要、但使用者不需要安裝：** Go（在 GitHub Actions 編譯 EXE）、Node.js/npm（用於同倉庫其他工具的建置）、GitHub Actions 的 Linux Python（用於封裝 ZIP）。已編譯的 EXE 不需要安裝 Go，PDF 新版也不依賴使用者自己執行 Node/npm。
+
+**其他相依風險：** 特定 AI 模型或 PyTorch Windows 組態可能要求 Microsoft Visual C++ 執行階段等原生元件；現行版本尚無可靠的通用檢查與自動安裝。只有收到實際缺失訊息後，才應從 [Microsoft 官方](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist) 取得相容版本。
+
+**注意：** 上述屬於「靜態原始碼審查＋啟動時偵測」。通過 GitHub Actions 只證明編譯、測試與封裝成功，**不代表**已在全新 Windows 電腦驗證所有安裝、下載及模型推論流程。
+ 
 **ComfyUI 未連線 ≠ 一定未安裝。** 若已安裝 ComfyUI 但沒有啟動，請先啟動；本版本固定使用 8188 埠；若 ComfyUI Desktop 使用其他埠，請將 ComfyUI 本機 API 改為 8188，或由維護者調整本程式的 engine_service.py 連線設定。**ComfyUI Desktop 及官方 Portable 可能自行附帶或管理 Python**，不代表它一定需要額外安裝系統 Python；本程式自己的 EXE 啟動器仍會獨立檢查 Python。
 
 模型官方來源：
