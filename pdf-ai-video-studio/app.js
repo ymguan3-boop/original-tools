@@ -21,6 +21,7 @@
     pythonStatus:$("pythonStatus"),comfyStatus:$("comfyStatus"),
     browserStatus:$("browserStatus"),ffmpegStatus:$("ffmpegStatus"),
     ollamaStatus:$("ollamaStatus"),gitStatus:$("gitStatus"),hardwareStatus:$("hardwareStatus"),
+    hardwarePreflight:$("hardwarePreflight"),setupHardware:$("setupHardwareStatus"),
     clipPrompt:$("aiPrompt"),reference:$("referenceImage"),clipGenerate:$("generateAIClip"),
     clipStatus:$("engineResult")
   };
@@ -575,6 +576,36 @@
 
   // Optional heavyweight models are not silently downloaded. A reviewed
   // ComfyUI API workflow and compatible model must already be installed.
+  function renderHardwarePreflight(hw, gpu){
+    const targets=[ui.hardwarePreflight,ui.setupHardware];
+    if(!hw||!hw.checked_at){
+      for(const el of targets){
+        el.textContent="尚無 EXE 啟動器的硬體檢測報告。請透過 Windows EXE 開啟程式並重新檢查。";
+        el.className="hardware-preflight warning";
+      }
+      return;
+    }
+    const cpu=hw.cpu_name||"CPU 型號未知";
+    const cores=(hw.physical_cores||"未確認")+" 實體核心／"+(hw.logical_cores||"未確認")+" 邏輯核心";
+    const ram=typeof hw.ram_gb==="number"?hw.ram_gb.toFixed(1)+" GB":"未確認";
+    const free=typeof hw.free_disk_gb==="number"?hw.free_disk_gb.toFixed(1)+" GB":"未確認";
+    const names=(hw.gpu_names||[]).join("、")||(gpu?.name||"未確認顯示卡");
+    const vram=hw.nvidia_vram_gb>0?hw.nvidia_vram_gb.toFixed(1)+" GB NVIDIA VRAM":"VRAM 未確認（不等於沒有 GPU）";
+    let assess="基本 PDF、配音、WebM：具備初步執行條件。";
+    if(hw.basic_ready===false)assess="基本 PDF 製片：硬體偏低，可能變慢或不穩定。";
+    if(hw.basic_ready===null)assess="尚未完整確認基本硬體條件。";
+    const adv=hw.advanced_tier==="high"?"高階本機影片：可能具備部分硬體條件，仍須跑模型測試":
+      hw.advanced_tier==="medium"?"進階模型：可嘗試低顯存設定，仍須測試模型":
+      hw.advanced_tier==="gpu-unverified"?"進階 AI：有偵測顯示卡，但 VRAM／加速能力未確認":
+      "進階 AI：不建議下載重量級 GPU 模型；基本 PDF 製片不需要 GPU";
+    const message="CPU："+cpu+"（"+cores+"）\nRAM："+ram+"；磁碟剩餘："+free+
+      "\nGPU："+names+"；"+vram+"\n"+assess+"\n"+adv+
+      "\n本檢查僅是硬體規格篩選，不是模型效能測試。";
+    for(const el of targets){
+      el.textContent=message;
+      el.className="hardware-preflight "+(hw.basic_ready===false?"warning":"ok");
+    }
+  }
   async function checkAIEngine(){
     // WebM codecs are built into the browser, not installed by our Python pip.
     const canvasCapable=typeof ui.preview.captureStream==="function";
@@ -588,6 +619,7 @@
       :"⚠ 缺少至少一項影音錄製能力；建議安裝最新版 Microsoft Edge";
     if(!state.service){
       state.engineStatus=null;
+      renderHardwarePreflight(null,null);
       ui.pythonStatus.textContent="未連線；請雙擊桌面版 EXE 執行檢查";
       ui.comfyStatus.textContent="無法檢測；請先啟動桌面版";
       [ui.ffmpegStatus,ui.ollamaStatus,ui.gitStatus,ui.hardwareStatus].forEach(el=>el.textContent="本機服務未連線");
@@ -599,6 +631,7 @@
       const result=await r.json();
       if(!r.ok)throw new Error(result.error||"本機 AI 服務錯誤");
       state.engineStatus=result;
+      renderHardwarePreflight(result.system_preflight,result.hardware);
       ui.pythonStatus.textContent=result.python?.installed
         ? "已偵測 Python "+result.python.version+"（桌面版本機環境）"
         : "無法確認 Python；請從官方網站下載";
@@ -626,6 +659,7 @@
       updateUI();
     }catch(e){
       state.engineStatus=null;
+      renderHardwarePreflight(null,null);
       ui.pythonStatus.textContent="本機環境狀態無法取得";
       ui.comfyStatus.textContent="ComfyUI 連線檢查失敗";
       [ui.ffmpegStatus,ui.ollamaStatus,ui.gitStatus,ui.hardwareStatus].forEach(el=>el.textContent="環境資訊未取得");
@@ -766,6 +800,9 @@
     }
     setup.summary.classList.remove("warn");
     setup.basic.textContent="✓ Python 本機服務、PDF.js、WebM 與 Web Audio 已可使用；PDF 匯入及逐頁編輯可開始。";
+    if(state.engineStatus?.system_preflight?.basic_ready===false){
+      setup.basic.textContent+=" 注意：CPU、RAM 或磁碟未達建議最低硬體門檻，建議縮小 PDF 頁數與輸出解析度。";
+    }
     const llmReady=ui.scripts.dataset.llm==="1";
     setup.summary.textContent=llmReady
       ?"✓ 基本製片環境完成；LLM 已設定。建議測試語音後開始製片。"
