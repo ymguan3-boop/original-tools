@@ -10,7 +10,7 @@
 <body>
 <header class="app-head">
   <div class="brand"><div class="brand-icon">▶</div><div><strong>PDF 智慧影音製作系統</strong><small>AI Video Studio · 原創工具集</small></div></div>
-  <div class="head-actions"><span class="status ok">Windows 桌面版</span><button type="button" id="serverStatus" class="status" title="重新檢查本機服務">正在檢查本機服務…</button></div>
+  <div class="head-actions"><button type="button" id="setupOpen" class="btn">首次啟動精靈</button><span class="status ok">Windows 桌面版</span><button type="button" id="serverStatus" class="status" title="重新檢查本機服務">正在檢查本機服務…</button></div>
 </header>
 <div class="workspace">
   <aside class="panel controls">
@@ -100,6 +100,56 @@
     <div id="log" role="status" aria-live="polite" class="log">請先匯入 PDF。若需 AI 與免錄屏語音輸出，請依 README 啟動本機服務。</div>
   </main>
 </div>
+
+<!-- First-run guide: the same screen remains accessible from the header. -->
+<div id="setupOverlay" class="setup-overlay" hidden>
+  <div class="setup-dialog" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+    <div class="setup-head">
+      <div><span class="setup-eyebrow">環境設定精靈 · Windows 本機版</span><h2 id="setupTitle">完成必要設定，即可開始製片</h2><p>依序檢查基本功能、設定 AI、測試旁白；重量級影片模型可以之後再安裝。</p></div>
+      <button type="button" id="setupClose" class="btn" aria-label="關閉設定精靈">✕</button>
+    </div>
+    <div class="setup-summary" id="setupSummary" role="status" aria-live="polite">檢查本機環境中…</div>
+    <div class="setup-body">
+      <section class="setup-step">
+        <h3><span>1</span> 基本環境（必要）</h3>
+        <p id="setupBasicStatus" class="hint">正在確認本機服務、PDF.js、瀏覽器的 WebM/Audio 能力。</p>
+        <button type="button" id="setupRefresh" class="btn">重新檢查所有環境</button>
+        <p class="hint">如果 EXE 找不到 Python，請先依跳出的視窗到 <a target="_blank" rel="noopener noreferrer" href="https://www.python.org/downloads/windows/">Python 官方網站</a>安裝，再重新雙擊 EXE。如果瀏覽器不支援錄影，請安裝 <a target="_blank" rel="noopener noreferrer" href="https://www.microsoft.com/edge/download">Microsoft Edge</a>。</p>
+      </section>
+      <section class="setup-step">
+        <h3><span>2</span> AI 逐頁文案（可選）</h3>
+        <p class="hint">不設定也能手動編輯 PDF 旁白。選擇 Ollama 本機模型，或使用你自己的 OpenAI 相容 API。金鑰只儲存於本機設定檔。</p>
+        <label for="setupProvider">服務類型</label>
+        <select id="setupProvider"><option value="remote">Free LLM API／其他 OpenAI 相容服務</option><option value="ollama">Ollama 本機模型</option></select>
+        <label for="setupBase">API Base URL</label><input id="setupBase" type="url" autocomplete="off" spellcheck="false" placeholder="https://你的供應商網址/v1">
+        <label for="setupModel">模型 ID</label><input id="setupModel" type="text" autocomplete="off" spellcheck="false" placeholder="供應商提供的模型 ID">
+        <label for="setupKey">API Key（已儲存時可留白保留）</label><input id="setupKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="由你自行設定；本機 Ollama 不需要">
+        <div class="setup-actions"><button type="button" id="setupSaveLLM" class="btn">儲存設定</button><button type="button" id="setupTestLLM" class="btn">測試 LLM 連線</button><a href="https://ollama.com/download/windows" target="_blank" rel="noopener noreferrer" class="setup-link">下載 Ollama</a></div>
+        <p id="setupLLMStatus" class="hint" role="status">尚未讀取 LLM 設定。</p>
+      </section>
+      <section class="setup-step">
+        <h3><span>3</span> 中文 AI 配音（建議先測試）</h3>
+        <p>Edge-TTS 免 API Key，但需連線 Microsoft 語音服務。按測試會送出一段範例文字。</p>
+        <div class="setup-actions"><button type="button" id="setupTestVoice" class="btn">測試臺灣中文配音</button><span id="setupVoiceStatus" class="hint">尚未測試</span></div>
+      </section>
+      <section class="setup-step">
+        <h3><span>4</span> AI 影片／數位人（進階選裝）</h3>
+        <p id="setupAdvancedStatus" class="hint">正在檢查 ComfyUI、GPU、FFmpeg 與模型工作流。</p>
+        <div class="setup-actions">
+          <a href="https://www.comfy.org/download" target="_blank" rel="noopener noreferrer" class="setup-link">下載 ComfyUI</a>
+          <a href="https://ffmpeg.org/download.html" target="_blank" rel="noopener noreferrer" class="setup-link">FFmpeg</a>
+          <a href="https://github.com/ymguan3-boop/original-tools/tree/main/pdf-ai-video-studio/local-service/workflows" target="_blank" rel="noopener noreferrer" class="setup-link">模型與工作流說明</a>
+        </div>
+        <p class="hint">ComfyUI 沒有回應不代表沒有安裝；可能需要先啟動。模型權重、PyTorch、CUDA 和自訂節點依所選工作流另外確認，不能保證一鍵自動安裝。</p>
+      </section>
+    </div>
+    <div class="setup-footer">
+      <button type="button" id="setupContinue" class="btn primary">進入 PDF 製片工作台</button>
+      <span class="hint">沒有 GPU 或尚未裝 ComfyUI，一樣可以使用 PDF 基本製片。</span>
+    </div>
+  </div>
+</div>
+
 <script src="../pdf-voice-video/lib/pdf.min.js"></script>
 <script defer src="./app.js"></script>
 </body>
