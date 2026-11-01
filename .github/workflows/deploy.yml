@@ -111,11 +111,20 @@ jobs:
             https://github.com/ymguan3-boop/original-tools/releases/download/v1.1.0/desktop-release.zip
           test -s image-audit/desktop-build/legacy-model.zip
 
+      - name: Check PDF AI Studio frontend syntax
+        run: node --check pdf-ai-video-studio/app.js
+
+      - name: Validate PDF AI Studio local service and security tests
+        run: |
+          python3 -m py_compile pdf-ai-video-studio/local-service/server.py
+          python3 -m unittest discover -s pdf-ai-video-studio/tests -p 'test_*.py' -v
+
       - name: Assemble deploy site
         run: |
           rm -rf deploy
           mkdir -p deploy/qr-platform
           mkdir -p deploy/pdf-voice-video
+          mkdir -p deploy/pdf-ai-video-studio
           mkdir -p deploy/mobile-remote-assist
           mkdir -p deploy/image-audit
 
@@ -129,6 +138,8 @@ jobs:
 
           # pdf-voice-video static (relative paths work under subpath)
           cp -r pdf-voice-video/* deploy/pdf-voice-video/
+          # New PDF AI Studio: STATIC ONLY. Do not ship local-service/.env or Python backend.
+          cp pdf-ai-video-studio/index.html pdf-ai-video-studio/app.js pdf-ai-video-studio/style.css deploy/pdf-ai-video-studio/
           # mobile remote assist frontend; signaling and token issuance remain server-side
           cp -r mobile-remote-assist/* deploy/mobile-remote-assist/
           # image-audit built assets (base: /original-tools/image-audit/)
@@ -224,6 +235,7 @@ jobs:
           touch deploy/.nojekyll
           touch deploy/qr-platform/.nojekyll
           touch deploy/pdf-voice-video/.nojekyll
+          touch deploy/pdf-ai-video-studio/.nojekyll
           touch deploy/mobile-remote-assist/.nojekyll
           touch deploy/image-audit/.nojekyll
 
