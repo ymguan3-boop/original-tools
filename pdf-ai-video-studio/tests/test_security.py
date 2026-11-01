@@ -63,6 +63,39 @@ class SecurityTests(unittest.TestCase):
         self.assertIn("dependencies",probe)
         self.assertIn("hardware",probe)
 
+    def test_first_run_llm_config_never_exposes_key(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            original_root=module.ROOT
+            module.ROOT=Path(directory)
+            try:
+                saved=module.save_llm_config({
+                    "base_url":"https://example.test/v1",
+                    "model":"test-model",
+                    "api_key":"very-private-demo-key",
+                    "keep_existing_key":False,
+                })
+                self.assertTrue(saved["has_api_key"])
+                self.assertNotIn("api_key",saved)
+                self.assertNotIn("very-private-demo-key",repr(saved))
+                self.assertIn("very-private-demo-key",(Path(directory)/".env").read_text())
+                with self.assertRaises(ValueError):
+                    module.save_llm_config({
+                        "base_url":"http://127.0.0.1:11434/v1",
+                        "model":"test-model",
+                        "api_key":"must-not-send-over-http",
+                        "keep_existing_key":False,
+                    })
+                with self.assertRaises(ValueError):
+                    module.save_llm_config({
+                        "base_url":"https://example.test/v1\nINJECT=1",
+                        "model":"test",
+                        "api_key":"",
+                        "keep_existing_key":False,
+                    })
+            finally:
+                module.ROOT=original_root
+
     def test_block_nonlocal_host(self):
         class Fake:
             headers={"Host":"evil.test:8765","Origin":None}
