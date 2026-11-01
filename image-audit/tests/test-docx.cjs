@@ -84,5 +84,11 @@ assert.ok(selector.includes('id="desktop-guide"')&&selector.includes('啟動工�
  assert.ok(doc.includes('【特徵點幾何對應圖】')&&doc.includes('【幾何對齊後差異熱區】'),'Diagnostic image captions absent');
  assert.ok(doc.includes('幾何高度疑似 1 組')&&doc.includes('跨門檻補列 1 組'),'Executive triage summary missing');
  assert.equal((doc.match(/<wp:extent cx="2664000" cy="1665000"/g)||[]).length,4,'Word images need matching fixed bounded dimensions');
+ const webOnly=await sharedSandbox.ImageAuditDocx.create({rows:[{...reportRows[0],geometryStatus:undefined,geometryRescued:undefined}],
+   title:'網頁快速初篩',engine:'共同視覺引擎 v2.5.1'});
+ const webParts=await readZip(webOnly);
+ const webDoc=new TextDecoder().decode(webParts['word/document.xml']);
+ assert.ok(webDoc.includes('幾何驗證：本快速版未執行'),'Web DOCX must identify geometry as NOT RUN instead of zero evidence');
+ assert.ok(!webDoc.includes('幾何高度疑似 0 組'),'Web DOCX misleadingly reports zero geometry detections');
  console.log('DOCX ZIP structure, pair order, uniform photo frames, descriptions and both app integrations: PASS');
 })().catch(e=>{console.error(e);process.exitCode=1});
