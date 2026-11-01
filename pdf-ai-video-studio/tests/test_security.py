@@ -96,6 +96,38 @@ class SecurityTests(unittest.TestCase):
             finally:
                 module.ROOT=original_root
 
+    def test_hardware_scan_reading_and_stale_fallback(self):
+        import tempfile, json, time
+        import engine_service
+        original=engine_service.WORKFLOWS
+        with tempfile.TemporaryDirectory() as directory:
+            engine_service.WORKFLOWS=Path(directory)/"workflows"
+            (Path(directory)/"workflows").mkdir()
+            try:
+                path=Path(directory)/".hardware-report.json"
+                data={
+                    "version":1,"checked_at":"2026-11-01T09:00:00Z",
+                    "cpu_name":"Example CPU","physical_cores":8,"logical_cores":16,
+                    "ram_gb":31.8,"gpu_names":["Example NVIDIA GPU"],
+                    "nvidia_vram_gb":23.6,"free_disk_gb":48.1,
+                    "basic_ready":True,"basic_recommended":True,
+                    "advanced_tier":"medium","notes":[]
+                }
+                path.write_text(json.dumps(data),encoding="utf-8")
+                got=engine_service.hardware_preflight()
+                self.assertEqual(got["logical_cores"],16)
+                self.assertEqual(got["ram_gb"],31.8)
+                self.assertTrue(got["basic_ready"])
+                self.assertEqual(got["gpu_names"],["Example NVIDIA GPU"])
+                path.write_text(json.dumps({"version":1,"logical_cores":2,"basic_ready":False}),encoding="utf-8")
+                self.assertFalse(engine_service.hardware_preflight()["basic_ready"])
+                old=time.time()-90000
+                import os
+                os.utime(path,(old,old))
+                self.assertIsNone(engine_service.hardware_preflight()["basic_ready"])
+            finally:
+                engine_service.WORKFLOWS=original
+
     def test_block_nonlocal_host(self):
         class Fake:
             headers={"Host":"evil.test:8765","Origin":None}
