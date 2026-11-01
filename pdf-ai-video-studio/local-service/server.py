@@ -4,10 +4,24 @@ from __future__ import annotations
 import asyncio, base64, json, os, re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
+import mimetypes
+import engine_service
 
 ROOT=Path(__file__).resolve().parent
-ORIGINS={"https://ymguan3-boop.github.io","http://127.0.0.1:8777","http://localhost:8777","http://127.0.0.1:8000","http://localhost:8000"}
+ORIGINS={"http://127.0.0.1:8765","http://localhost:8765","https://ymguan3-boop.github.io","http://127.0.0.1:8777","http://localhost:8777","http://127.0.0.1:8000","http://localhost:8000"}
+# Exact static file allowlist. Never expose .env, Python sources, or model files.
+PACKAGE_ROOT=ROOT.parent.parent
+STUDIO_ROOT=ROOT.parent
+STATIC={
+    "/pdf-ai-video-studio/":(STUDIO_ROOT/"index.html","text/html; charset=utf-8"),
+    "/pdf-ai-video-studio/index.html":(STUDIO_ROOT/"index.html","text/html; charset=utf-8"),
+    "/pdf-ai-video-studio/app.js":(STUDIO_ROOT/"app.js","application/javascript; charset=utf-8"),
+    "/pdf-ai-video-studio/style.css":(STUDIO_ROOT/"style.css","text/css; charset=utf-8"),
+    "/pdf-voice-video/lib/pdf.min.js":(PACKAGE_ROOT/"pdf-voice-video"/"lib"/"pdf.min.js","application/javascript; charset=utf-8"),
+    "/pdf-voice-video/lib/pdf.worker.min.js":(PACKAGE_ROOT/"pdf-voice-video"/"lib"/"pdf.worker.min.js","application/javascript; charset=utf-8")
+}
+
 VOICES={"zh-TW-YunJheNeural","zh-TW-HsiaoChenNeural","zh-TW-HsiaoYuNeural","zh-CN-YunjianNeural"}
 STYLES={
     "audit":"專業審計口吻：審慎、準確，區分事實與風險，不自行推測。",
@@ -117,21 +131,55 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers","Content-Type")
         self.send_header("Access-Control-Allow-Private-Network","true")
         self.end_headers()
+    def send_binary(self,content,data):
+        self.send_response(200)
+        self.send_header("Content-Type",content)
+        self.send_header("Content-Length",str(len(data)))
+        self.send_header("Cache-Control","no-store")
+        self.send_header("X-Content-Type-Options","nosniff")
+        origin=self.headers.get("Origin")
+        if origin in ORIGINS:
+            self.send_header("Access-Control-Allow-Origin",origin)
+            self.send_header("Vary","Origin")
+        self.end_headers()
+        self.wfile.write(data)
     def do_GET(self):
-        if not self.allowed():self.send_json(403,{"error":"Origin forbidden"})
-        elif self.path=="/health":self.send_json(200,{"ok":True,"llm_ready":ready(config()),"tts_ready":True})
-        else:self.send_json(404,{"error":"Not found"})
+        if not self.allowed():self.send_json(403,{"error":"Origin forbidden"});return
+        parsed=urlsplit(self.path)
+        endpoint=parsed.path
+        if endpoint in STATIC:
+            path,mime=STATIC[endpoint]
+            if not path.is_file():self.send_json(404,{"error":"Bundled web file missing"});return
+            self.send_binary(mime,path.read_bytes());return
+        if endpoint=="/health":
+            self.send_json(200,{"ok":True,"llm_ready":ready(config()),"tts_ready":True,"desktop":True});return
+        try:
+            if endpoint=="/api/engine/status":
+                self.send_json(200,engine_service.status());return
+            if endpoint in ("/api/engine/job","/api/engine/output"):
+                job_id=parse_qs(parsed.query).get("id",[""])[0]
+                if endpoint=="/api/engine/job":
+                    self.send_json(200,engine_service.lookup(job_id));return
+                content,kind=engine_service.video_bytes(job_id)
+                self.send_binary(kind,content);return
+        except ValueError as e:
+            self.send_json(400,{"error":str(e)});return
+        except Exception:
+            self.send_json(502,{"error":"本機 ComfyUI 無法連線或影片尚未輸出"});return
+        self.send_json(404,{"error":"Not found"})
     def do_POST(self):
         if not self.allowed():self.send_json(403,{"error":"Origin forbidden"});return
-        if self.path not in ("/api/llm","/api/tts"):self.send_json(404,{"error":"Not found"});return
+        if self.path not in ("/api/llm","/api/tts","/api/engine/render"):self.send_json(404,{"error":"Not found"});return
         if not self.headers.get("Content-Type","").startswith("application/json"):
             self.send_json(415,{"error":"JSON required"});return
         try:
             size=int(self.headers.get("Content-Length","0"))
-            if not 0<size<=40000:self.send_json(413,{"error":"Body must be 1-40000 bytes"});return
+            max_bytes=18_000_000 if self.path=="/api/engine/render" else 40_000
+            if not 0<size<=max_bytes:self.send_json(413,{"error":"Body too large or empty"});return
             body=json.loads(self.rfile.read(size).decode("utf-8"))
             if not isinstance(body,dict):raise ValueError("JSON 格式錯誤")
             if self.path=="/api/llm":out=llm(body)
+            elif self.path=="/api/engine/render":out=engine_service.queue(body)
             else:
                 text=body.get("text");voice=body.get("voice")
                 if not isinstance(text,str) or not 1<=len(text)<=1800:raise ValueError("旁白限 1-1800 字")
@@ -144,7 +192,7 @@ class Handler(BaseHTTPRequestHandler):
         print("["+self.log_date_time_string()+"] "+fmt%args)
 if __name__=="__main__":
     print("PDF AI Video Studio · loopback 127.0.0.1:8765")
-    print("請在瀏覽器開啟 https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/")
+    print("請在瀏覽器開啟 http://127.0.0.1:8765/pdf-ai-video-studio/")
     print("金鑰只從本機 .env 讀取；勿將 8765 埠轉發到公開網路。")
     try:ThreadingHTTPServer(("127.0.0.1",8765),Handler).serve_forever()
     except KeyboardInterrupt:print("Stopped.")
