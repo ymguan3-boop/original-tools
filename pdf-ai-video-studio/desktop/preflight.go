@@ -105,8 +105,7 @@ func gpuAndCPU(base string, report *machineReport) {
     nv.SysProcAttr=&syscall.SysProcAttr{HideWindow:true}
     raw,e:=nv.Output()
     if e==nil {
-        first:=strings.SplitN(strings.TrimSpace(string(raw)),"
-",2)[0]
+        first:=strings.SplitN(strings.TrimSpace(string(raw)),"\\n",2)[0]
         parts:=strings.SplitN(first,",",2)
         if len(parts)==2 {
             v,e2:=strconv.ParseFloat(strings.TrimSpace(parts[1]),64)
