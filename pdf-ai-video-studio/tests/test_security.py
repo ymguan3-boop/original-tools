@@ -25,5 +25,25 @@ class SecurityTests(unittest.TestCase):
         self.assertIn("zh-TW-YunJheNeural",module.VOICES)
         self.assertNotIn("../../etc/passwd",module.VOICES)
 
+    def test_workflow_placeholders(self):
+        import tempfile, json
+        import engine_service
+        old=engine_service.WORKFLOWS
+        with tempfile.TemporaryDirectory() as temp:
+            engine_service.WORKFLOWS=Path(temp)
+            try:
+                graph={"7":{"class_type":"CLIPTextEncode","inputs":{"text":"__PROMPT__"}}}
+                (Path(temp)/"wan22.json").write_text(json.dumps(graph),encoding="utf-8")
+                out=engine_service.graph_for("wan22","畫面示意")
+                self.assertEqual(out["7"]["inputs"]["text"],"畫面示意")
+                with self.assertRaises(ValueError):
+                    engine_service.graph_for("../../evil","prompt")
+            finally:
+                engine_service.WORKFLOWS=old
+    def test_static_file_allowlist(self):
+        self.assertNotIn("/pdf-ai-video-studio/local-service/.env",module.STATIC)
+        self.assertIn("/pdf-ai-video-studio/index.html",module.STATIC)
+        self.assertIn("/pdf-voice-video/lib/pdf.min.js",module.STATIC)
+
 if __name__=="__main__":
     unittest.main()
