@@ -118,7 +118,7 @@ jobs:
 
       - name: Validate PDF AI Studio local service and security tests
         run: |
-          python3 -m py_compile pdf-ai-video-studio/local-service/server.py
+          python3 -m py_compile pdf-ai-video-studio/local-service/server.py pdf-ai-video-studio/local-service/voice_clone.py
           python3 -m unittest discover -s pdf-ai-video-studio/tests -p 'test_*.py' -v
 
       - name: Build Windows PDF AI Studio GUI launcher
@@ -158,9 +158,14 @@ jobs:
           files=[
             'index.html', 'app.js', 'style.css', 'README.md',
             'local-service/server.py', 'local-service/engine_service.py',
+            'local-service/voice_clone.py',
             'local-service/requirements.txt','local-service/.env.example',
             'local-service/start.bat','local-service/start.sh',
-            'local-service/workflows/README.md'
+            'local-service/workflows/README.md',
+            'local-service/workflows/tts_index2.json',
+            'local-service/workflows/INDEXTTS2.md',
+            'third-party/Pixelle-Video-APACHE-2.0.txt',
+            'third-party/NOTICE.md'
           ]
           with ZipFile(output,'w',ZIP_DEFLATED,compresslevel=9) as z:
               z.write('pdf-ai-video-studio/desktop-build/啟動PDF智慧影音.exe',arcname='啟動PDF智慧影音.exe')
@@ -182,6 +187,9 @@ jobs:
               assert not any(name.endswith('/.env') or '/.venv/' in name or '/models/' in name for name in names)
               assert 'pdf-ai-video-studio/index.html' in names, 'HTML must be inside desktop ZIP'
               assert 'pdf-ai-video-studio/local-service/engine_service.py' in names
+              assert 'pdf-ai-video-studio/local-service/voice_clone.py' in names
+              assert 'pdf-ai-video-studio/local-service/workflows/tts_index2.json' in names
+              assert 'pdf-ai-video-studio/third-party/Pixelle-Video-APACHE-2.0.txt' in names
               assert 'pdf-ai-video-studio/desktop/setup-guide.html' in names, 'Offline Python installation guide must ship'
           # Do not accidentally reintroduce an online version of this desktop-only tool.
           published=list(Path('deploy/pdf-ai-video-studio').iterdir())
