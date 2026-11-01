@@ -6,6 +6,21 @@
 - **原創工具集首頁**：https://ymguan3-boop.github.io/original-tools/
 - **程式原始碼**：https://github.com/ymguan3-boop/original-tools/tree/main/pdf-ai-video-studio
 
+## Windows EXE 的 CPU／GPU 硬體預先檢測（新增）
+
+在**檢查 Python／安裝套件之前**，Windows EXE 每次啟動都會先使用 Windows 系統 API、PowerShell（如可用）及 NVIDIA 的 `nvidia-smi`（如已安裝）查詢本機 CPU、實體／邏輯核心數、RAM、GPU 名稱、可確認的 NVIDIA VRAM，以及程式所在磁碟剩餘容量。結果會在繁體中文對話框顯示，**使用者按「是」才繼續啟動**；亦會在 HTML「首次啟動精靈」與「AI 影片與數位人」區域顯示。
+
+| 使用等級 | 估算門檻（規劃用，不是模型官方最低需求） | 建議操作 |
+|---|---|---|
+| 基本可嘗試 | 2 個以上邏輯 CPU 核心、4 GB RAM、2 GB 空間 | 可嘗試 PDF 匯入、手動旁白及小型 WebM；低於此值會警告 |
+| 基本較適合 | 4 個以上邏輯 CPU 核心、8 GB RAM、5 GB 空間 | 較適合一般 PDF 製片、Edge-TTS 與 LLM API |
+| 進階低顯存模型候選 | NVIDIA VRAM ≥8 GB、RAM ≥16 GB、剩餘磁碟 ≥20 GB | 可試部分低顯存工作流；須逐項安裝驗證 |
+| 高階影片模型候選 | NVIDIA VRAM ≥24 GB、RAM ≥16 GB、剩餘磁碟 ≥35 GB | 可再評估 Wan2.2 等模型；仍須確認 PyTorch／CUDA／模型實測 |
+
+**沒有 NVIDIA GPU 不會阻止基本 PDF、Edge-TTS、免費 LLM API 或 WebM 製片。** 如果只有內顯、AMD GPU 或本機 GPU 資訊查詢失敗，將標示 VRAM／加速能力未確認；**不會武斷判定沒有顯示卡**。CPU 核心數與記憶體只能初步評估是否足以執行，**不能保證特定模型生成速度或相容性**。本機高階模型不應僅靠 CPU 推論。
+
+預檢摘要存於下載包的 `local-service/.hardware-report.json`，**只儲存硬體概況、不記錄個人文件或 API Key**，不會部署到 GitHub Pages。若系統禁止 PowerShell 或無法讀取數據，介面會標示未知，讓使用者自行確認，而不是誤判。可在下一次雙擊 EXE 時重新檢測。
+
 ## 一鍵啟動後的互動式引導（新）
 
 **操作順序：** 下載 ZIP → 完整解壓縮 → 雙擊 `啟動PDF智慧影音.exe` → 確認 Python → 在使用者同意後安裝必要 pip 套件 → 自動開啟本機 HTML 與首次啟動精靈。
@@ -26,6 +41,7 @@ API Key 只會儲存在本機 `local-service/.env`，**這是明文設定檔，�
 ## 第一次啟動（使用者不需手動輸入指令）
 
 1. 下載 Windows ZIP，**完整解壓縮**到可寫入的資料夾，例如文件資料夾。
+   **首次雙擊會先顯示硬體規格與建議功能；按「是」才繼續 Python 檢測。**
 2. 雙擊「啟動PDF智慧影音.exe」。程式會先檢查**電腦是否有 Python 3.10–3.14**，優先使用 3.12 或 3.13。檢查的是可用的 Python 執行環境，不會自行變更其他應用程式的 Python。
 3. **未找到相容 Python**：顯示繁體中文提示及官方網址，按「是」開啟 https://www.python.org/downloads/windows/ 。請選 Python 3.12／3.13 的 Windows x64 安裝版本。安裝完成後重新啟動桌面版。
 4. **已有相容 Python**：程式在自己的 local-service/.venv 建立虛擬環境。若缺少 edge-tts、httpx 等套件，會先詢問同意，才從 PyPI 安裝。第一次操作需要網路。
