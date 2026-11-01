@@ -97,7 +97,7 @@ footer{padding-top:26px;color:#76879e;font-size:12px}
 <tr><td class="param-name">重疊率／差異區域</td><td>僅桌面</td><td>標記幾何映射的有效影像範圍及超過閾值的灰階差異</td><td>重疊率＝有效對齊像素數／兩圖有效像素數較小值 × 100%；差異比例＝亮度差大於 32 的像素／有效像素 × 100%</td><td>揭露局部驗證範圍；重疊率 100% 不代表影像完全相同</td></tr>
 <tr><td class="param-name">MobileSAM／YOLO</td><td>兩版均未加入</td><td>物件分割／辨識，非本次必要功能</td><td>未執行，不應顯示百分比</td><td>將來有指定物件數量或輪廓需求才評估</td></tr></tbody></table></div>
 <div class="guide-note"><b>判讀提醒：</b>網頁版以速度為優先，桌面版對全批次配對進行局部幾何驗證。低於共同視覺門檻但符合局部幾何條件者可在桌面版補列。SIFT-style 不是完整 OpenCV SIFT；RANSAC 的「內點比例」不是重複請款機率。OpenRouter 僅於使用者主動同意時作為可見內容說明。</div>
-<h3 class="subhead">v2.5.1｜全照片自動進階查核與報告升級</h3>
+<h3 class="subhead">v2.5.1｜完整辨識流程、百分比說明與私有測試機制</h3>
 <div class="steps">
  <article class="step"><h3>網頁版／免安裝 HTML 版</h3><p>修復以 390px JPEG 縮圖計算相似度造成的偏差，改由原始照片解碼後取樣。縮圖仍僅用於顯示及報告。保留快速 pHash、dHash、結構、邊緣與位置校正，不加入 DINOv2、SAM、YOLO。</p></article>
  <article class="step"><h3>Windows DINOv2 桌面版</h3><p>保留 DINOv2-small 及可用時的局部 Patch 特徵；搭配 FAST／方向 BRIEF、RANSAC、SSIM、差異熱區與 SHA-256。按「開始分析」即對全部跨批次照片執行進階辨識；DOCX 僅輸出已入選的可疑組別及實際驗證數值；不需要 Python 或 Node.js。</p></article>
