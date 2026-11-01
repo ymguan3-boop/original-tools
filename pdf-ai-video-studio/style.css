@@ -40,3 +40,11 @@
 .setup-footer{padding:16px 24px;border-top:1px solid #2d4869;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#0c1a2d}
 .setup-footer .hint{max-width:390px}
 @media(max-width:640px){.setup-head{padding:14px 15px}.setup-head h2{font-size:18px}.setup-body{padding:3px 15px}.setup-footer{padding:12px 15px;flex-direction:column;align-items:stretch}.setup-summary{padding:10px 15px}.setup-footer .btn{width:100%}}
+
+/* Optional local speaker-cloning controls */
+.voice-clone-options{margin:12px 0 16px;padding:13px;border-radius:12px;border:1px solid #385a7c;background:#0d2238}
+.voice-clone-options .btn{margin-top:8px}
+.voice-clone-options .switch{line-height:1.7;align-items:flex-start}
+.voice-clone-options p{line-height:1.6}
+.voice-clone-options a{color:#a5d9ff;display:block;margin-top:10px}
+.voice-clone-options input[type=file]{max-width:100%;font-size:12px}
