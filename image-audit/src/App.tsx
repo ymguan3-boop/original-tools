@@ -24,6 +24,7 @@ const DINO_MODEL_ID = 'Xenova/dinov2-small';
 /** 清單最多保留的組數，避免記憶體爆掉 */
 const MAX_RESULTS = 2000;
 const DESKTOP_FULL_SCAN = true;
+const PARAMETER_GUIDE_ROWS: readonly (readonly [string,string,string,string,string])[] = [["共同視覺初篩分數","兩版","以影像特徵排序疑似配對","0～100 分；pHash 38%＋明暗結構 33%＋邊緣 18%＋dHash 11% 為基礎權重，另有可信度封頂與補正","快速初篩；分數不是同源或違規機率"],["pHash／dHash","兩版","頻率構圖／相鄰亮暗變化","pHash 相同位元／63×100%；dHash 相同位元／64×100%；權重分別 38%、11%","重存、縮放後初篩；大裁切容易改變雜湊"],["明暗結構","兩版","32×32 像素的亮暗空間相關性","相關性經轉換為 0～100 指標；基礎權重 33%","曝光變化與局部裁切影響結果"],["邊緣一致性","兩版","比對灰階邊緣方向與分布","梯度相關性轉換為 0～100 指標；基礎權重 18%","輪廓相似但非同源證據"],["像素／色彩","兩版","RGB 差距、色彩直方圖交集","0～100 輔助值，不另納入前述主權重","照片色調相同不能證明同源"],["去白邊／多區域","兩版","保守排除近白外框並比對全圖、中心及去白邊區","區域選擇不是百分比，可能影響最佳共同分數","掃描邊界與裁切；不會重新創造原始畫面"],["位置校正","兩版","32×32 特徵圖於 ±4 格測試位移","灰階相關性映射成 0～100，非特徵點內點率","小幅偏移；不處理大幅透視變形"],["DINOv2-small CLS","桌面版","384 維全圖語意向量餘弦比對","餘弦值×100，非同源機率、不加入共同分數","相似場景會高分，需幾何交叉驗證"],["DINOv2 Patch","桌面版（可用時）","可用的 4×4 局部 token 特徵彙總","局部餘弦×100；未回傳時顯示未取得","局部證據，不能直接作違規判定"],["SHA-256","桌面版","檢查照片檔案二進位是否完全相同","相同／不同，不存在相似度百分比","裁切、重新輸出後通常不相同"],["FAST／方向 BRIEF","桌面版","局部角點與二進位描述子匹配","匹配點數，不是百分比；不是 OpenCV ORB","一般裁切、縮放與旋轉；低紋理可能漏判"],["多尺度 SIFT-style","桌面版（後備）","FAST 證據不足時補充自製 128 維梯度描述子","匹配點數，不是百分比，也不是完整 OpenCV SIFT","局部裁切補強，仍可能有漏判"],["RANSAC","桌面版","以相似變換尋找幾何一致的局部匹配","內點比例＝內點／匹配點×100%；覆蓋率＝內點外接框面積／384×288×100%","同源幾何線索；不是 Homography 或違規機率"],["對齊後 SSIM","桌面版","在有效幾何重疊區域比較 8×8 區塊結構","SSIM 指標映射至 0～100；不是照片同源機率","光照、雜訊、遮蔽及非重疊區域會影響"],["有效重疊／差異區","桌面版","揭露幾何驗證涵蓋範圍及亮度差異","重疊＝有效對齊像素／較小有效影像像素×100%；差異＝亮差>32之有效像素／有效像素×100%","高重疊不保證全圖相同；差異熱區供人工判讀"],["MobileSAM／YOLO","兩版未啟用","物件分割或物件偵測","未執行，不輸出任何辨識百分比","有具體物件計數需求再評估"]];
 const DESKTOP_VERSION = '2.5.0';
 /** 清單每頁顯示組數 */
 const PAGE_SIZE = 30;
@@ -1063,17 +1064,24 @@ const App = () => {
 
           <details className="rounded-xl border border-blue-100 bg-white p-4 text-sm leading-7">
             <summary className="font-bold text-blue-800 cursor-pointer">辨識參數說明｜快速共用評分與桌面版精準查核（點此展開）</summary>
-            <div className="mt-3 grid md:grid-cols-2 gap-3 text-xs text-slate-700">
-              <p><b>共同視覺分數：</b>網頁與桌面版以 pHash / dHash、明暗結構、邊緣、色彩、像素及位置校正綜合篩選；相同門檻可比較，但分數不是違規機率。</p>
-              <p><b>DINOv2-small CLS：</b>384 維特徵餘弦相似度，辨識場景的語意接近程度；不納入跨版本共同門檻。</p>
-              <p><b>DINOv2 局部 Patch：</b>模型若回傳局部 tokens，才彙整成 4×4 區域特徵作為補充證據；不支援時不虛構數值。</p>
-              <p><b>FAST / 方向 BRIEF：</b>提取局部角點及描述子，比對裁切、縮放及旋轉後可能對應的畫面部位；非完整 OpenCV ORB。</p>
-              <p><b>RANSAC：</b>以旋轉、縮放、位移相似變換檢查匹配點的幾何一致性，統計內點數、比例及覆蓋率；不等同透視 Homography。</p>
-              <p><b>對齊 SSIM：</b>以 8×8 區塊衡量結構一致性，配合紅色差異熱區輔助人工檢視；光照與畫面遮蔽會影響數值。</p>
-              <p><b>SHA-256：</b>確定兩個檔案位元組是否完全相同；重壓縮、裁切後的照片通常不同。</p>
-              <p><b>MobileSAM / YOLO：</b>未預載，避免體積及速度負擔；未來有指定物件分割需求再評估選配。</p>
+            <p className="mt-3 text-xs text-slate-700 leading-6">百分比請分開解讀：基礎<strong>計分權重</strong>、各技術的<strong>影像相似指標</strong>與<strong>幾何內點／有效像素占比</strong>彼此不同，均非違規機率。共同分數另有可信度封頂與補正。</p>
+            <div className="mt-3 overflow-x-auto border border-blue-100 rounded-xl" role="region" aria-label="完整辨識參數百分比與適用範圍" tabIndex={0}>
+              <table className="w-full min-w-[950px] text-xs text-left text-slate-700 border-collapse">
+                <thead className="bg-blue-50 text-blue-950"><tr>
+                  <th className="p-3">辨識參數</th><th className="p-3">適用版本</th><th className="p-3">功能</th><th className="p-3">百分比／數值定義</th><th className="p-3">適用範圍與限制</th>
+                </tr></thead>
+                <tbody>{PARAMETER_GUIDE_ROWS.map(([name,edition,purpose,definition,scope],index)=>(
+                  <tr key={name} className={index%2?'bg-slate-50':'bg-white'}>
+                    <th scope="row" className="p-3 align-top font-bold text-blue-900 border-t border-slate-100">{name}</th>
+                    <td className="p-3 align-top border-t border-slate-100 whitespace-nowrap">{edition}</td>
+                    <td className="p-3 align-top border-t border-slate-100">{purpose}</td>
+                    <td className="p-3 align-top border-t border-slate-100">{definition}</td>
+                    <td className="p-3 align-top border-t border-slate-100">{scope}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
             </div>
-            <p className="mt-2 text-xs text-slate-500">進階驗證僅對點選的組別執行，不改動全批次排序、分數或快速篩選。仍須人工查核原始照片、施工日誌、拍攝時間與驗收資料。</p>
+            <p className="mt-3 text-xs text-slate-600 leading-6">按下「開始分析」會針對<strong>所有跨批次照片配對</strong>執行共同視覺與桌面版局部幾何檢查；FAST 證據不足時才啟用 SIFT-style 後備。DOCX 僅輸出入選組別，並保留實際方法與數值。OpenRouter 仍須使用者主動選擇，不會在初始分析時自動上傳照片。</p>
           </details>
 
           <details className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 text-sm leading-7">
