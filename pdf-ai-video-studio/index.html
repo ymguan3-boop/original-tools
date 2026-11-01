@@ -10,7 +10,7 @@
 <body>
 <header class="app-head">
   <div class="brand"><div class="brand-icon">▶</div><div><strong>PDF 智慧影音製作系統</strong><small>AI Video Studio · 原創工具集</small></div></div>
-  <div class="head-actions"><a href="https://github.com/ymguan3-boop/original-tools/tree/main/pdf-ai-video-studio" target="_blank" rel="noopener noreferrer">安裝本機 AI／配音服務</a><button type="button" id="serverStatus" class="status" title="點擊重新連線本機服務">正在檢查本機服務…</button><a href="../">返回原創工具集</a></div>
+  <div class="head-actions"><span class="status ok">Windows 桌面版</span><button type="button" id="serverStatus" class="status" title="重新檢查本機服務">正在檢查本機服務…</button></div>
 </header>
 <div class="workspace">
   <aside class="panel controls">
@@ -58,8 +58,13 @@
         <option value="musetalk">MuseTalk · 人物嘴型同步</option>
         <option value="sadtalker">SadTalker · 照片數位人</option>
       </select>
-      <button class="btn" id="engineCheck">檢查 GPU／模型／ComfyUI</button>
-      <p id="engineDetails" class="hint" role="status">需使用 Windows 桌面版，先安裝官方 ComfyUI 及對應的可信模型工作流。</p>
+      <button class="btn" id="engineCheck">檢查 Python／ComfyUI／GPU／模型</button>
+      <div class="dependency-guide" aria-label="本機環境檢查結果">
+        <div class="dependency-item"><span><strong>Python 執行環境</strong><small id="pythonStatus">等待檢查…</small></span><a target="_blank" rel="noopener noreferrer" href="https://www.python.org/downloads/windows/">Python 官方下載</a></div>
+        <div class="dependency-item"><span><strong>ComfyUI（進階功能選裝）</strong><small id="comfyStatus">等待檢查…</small></span><a target="_blank" rel="noopener noreferrer" href="https://www.comfy.org/download">ComfyUI 官方下載</a></div>
+        <p class="hint">ComfyUI 的桌面版通常自行管理 Python 環境；本製片程式的 EXE 則獨立檢查 Python。如 ComfyUI 已安裝但尚未執行，請先開啟 ComfyUI 並確認本機 API 連線。</p>
+      </div>
+      <p id="engineDetails" class="hint" role="status">模型屬選裝項目。未偵測 ComfyUI 執行時，不代表一定沒有安裝。</p>
       <label for="aiPrompt">目前頁面 AI 影片提示詞</label>
       <textarea id="aiPrompt" rows="4" class="inline-textarea" maxlength="1200" placeholder="描述希望展示的動畫，正式 PDF 圖表與文字請保持原樣。">沉穩、專業、清晰的動態示意；不更動原始資料數值。</textarea>
       <label for="referenceImage">人物參考圖（數位人必填；PNG）</label>
