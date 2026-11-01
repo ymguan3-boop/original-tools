@@ -62,6 +62,8 @@ def save_llm_config(body):
         raise ValueError("LLM 設定需為文字")
     base=base.strip().rstrip("/")
     model=model.strip()
+    if any(x in base for x in "\r\n\t") or len(base)>1024:
+        raise ValueError("URL 格式有誤")
     if not valid_url(base) or not 1<=len(model)<=128 or not all(c not in model for c in "\r\n<>"):
         raise ValueError("端點必須使用 HTTPS 或本機 HTTP；請填有效模型名稱")
     if len(key)>1024 or any(x in key for x in "\r\n"):
