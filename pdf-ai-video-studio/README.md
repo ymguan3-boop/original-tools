@@ -13,6 +13,34 @@
 
 並保留 PDF 底線候選標記導讀、自訂逐頁旁白、PDF 原始圖表比例與逐頁文字稿下載。
 
+## Windows 桌面版（新！）
+
+**直接下載：** https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/pdf-ai-video-studio-desktop.zip
+
+1. 從「原創工具集」點擊「下載 Windows 桌面版 ZIP」；解壓縮**整包檔案**，不要只複製 EXE。
+2. **雙擊「啟動PDF智慧影音.exe」**。Windows 圖形啟動器會依序檢查 Python 3.10–3.14 是否已安裝；優先選擇 Python 3.12/3.13。
+3. **若找不到 Python**，會跳出繁體中文提示視窗，點「是」將自動開啟官方 Python Windows 下載頁：
+   https://www.python.org/downloads/windows/
+   建議安裝 **Python 3.12 或 3.13** 以兼容本地 AI 工具。安裝後請關閉並重新執行啟動器。
+4. **若已有 Python**，程式自動建立獨立 .venv；需要安裝 Edge-TTS/httpx 時會再次**詢問同意**，才會透過 pip 下載到該虛擬環境。
+5. 啟動器自動開啟 `http://127.0.0.1:8765/pdf-ai-video-studio/` 的 HTML 製片介面。無須額外開啟終端機，也不必在瀏覽器設定系統音訊分享。
+6. AI 文案需在本機 `pdf-ai-video-studio/local-service/.env` 填寫你的 LLM 設定；可使用 Ollama 或現有相容的 Free LLM API。Edge-TTS 不需要 LLM Key，但需要網路。
+7. AI 影片與數位人是**選裝**：需要獨立安裝 ComfyUI、本機模型和經審核的 API 工作流。初始 ZIP 不含模型權重，也不會在沒有同意下下載大型模型。
+
+**下載檔和 Python 注意：** 這是 Windows x64 可攜式 ZIP，不是 MSI 安裝程式；**沒有內建 Python**，因此才設計上述檢測與導向官方下載流程。不需要系統管理員權限安裝到系統目錄；建議解壓縮至可寫入的使用者文件資料夾。如啟動不成功，可查看 ZIP 解壓縮目錄的 `pdf-studio-launch.log`。如電腦已有其他程式占用本機 8765 連接埠，需先處理衝突。
+
+## 可選 AI 影片與數位人模型
+
+- **Wan2.2**：PDF 畫面衍生示意動畫，需相容的本機 ComfyUI API 工作流。官方模型： https://github.com/Wan-Video/Wan2.2
+- **MuseTalk**：已獲肖像授權的人像搭配原本配音，建立對嘴講解影片。官方模型： https://github.com/TMElyralab/MuseTalk
+- **SadTalker**：參考人像與語音的照片口播。官方模型： https://github.com/OpenTalker/SadTalker
+
+**模型目前不會自動安裝。** 需在 ComfyUI 成功測試模型、將受信任的 **API format** 工作流放入 `local-service/workflows/wan22.json`、`musetalk.json` 或 `sadtalker.json`，再使用網頁的「檢查 GPU／模型」與「產生目前頁面 AI 影片」功能。工作流必須包含 `__PROMPT__` 佔位值；需要圖或音檔則使用 `__IMAGE__`、`__AUDIO__`。可參考 `local-service/workflows/README.md`。
+
+桌面版會檢查 NVIDIA 顯示卡資訊和 ComfyUI 的執行狀態。若 GPU 不足或未裝模型，原本的 PDF、AI 文案、Edge-TTS、BGM 和 WebM 功能仍能獨立使用。
+
+**目前的能力界線：** 已建立 ComfyUI 工作流排隊、狀態查詢、影片讀取、逐頁畫中畫及標明「AI 生成示意」的播放與錄製介面；**沒有**將各模型推論環境、全部模型權重和通用成功工作流內建在 ZIP。不同模型的實際嘴型品質、影音時長及節點適配，仍需依硬體逐項驗收。
+
 ## GitHub Pages 使用方式
 
 開啟上方網址，匯入 PDF，選擇旁白來源、語音、背景音樂與模板。
