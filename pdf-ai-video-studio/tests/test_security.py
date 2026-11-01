@@ -52,6 +52,17 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(engine_service.BASE,"http://127.0.0.1:8188")
         self.assertTrue(engine_service.status()["python"]["installed"])
         self.assertEqual(engine_service.status()["comfyui_download_url"],"https://www.comfy.org/download")
+    def test_optional_dependency_probe(self):
+        import engine_service
+        data=engine_service.preflight_tools()
+        for key in ("ffmpeg_in_path","git_in_path","ollama_api_ready","free_disk_gb","links"):
+            self.assertIn(key,data)
+        self.assertIsInstance(data["ffmpeg_in_path"],bool)
+        self.assertIn("ffmpeg.org/download",data["links"]["ffmpeg"])
+        probe=engine_service.status()
+        self.assertIn("dependencies",probe)
+        self.assertIn("hardware",probe)
+
     def test_block_nonlocal_host(self):
         class Fake:
             headers={"Host":"evil.test:8765","Origin":None}
