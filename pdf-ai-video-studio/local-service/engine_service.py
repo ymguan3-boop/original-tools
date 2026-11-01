@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import sys
 import subprocess
 import uuid
 from urllib.parse import quote
@@ -47,6 +48,9 @@ def status():
         pass
     return {
         "comfyui_ready": alive,
+        "python": {"installed": True, "version": ".".join(str(x) for x in sys.version_info[:3]), "path": sys.executable},
+        "comfyui_download_url": "https://www.comfy.org/download",
+        "python_download_url": "https://www.python.org/downloads/windows/",
         "hardware": vram(),
         "engines": [
             dict(id=key,label=spec["label"],repo=spec["repo"],workflow_ready=(WORKFLOWS/spec["workflow"]).is_file(),min_vram_gb=spec["min_vram"])
