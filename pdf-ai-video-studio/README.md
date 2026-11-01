@@ -6,6 +6,23 @@
 - **原創工具集首頁**：https://ymguan3-boop.github.io/original-tools/
 - **程式原始碼**：https://github.com/ymguan3-boop/original-tools/tree/main/pdf-ai-video-studio
 
+## 一鍵啟動後的互動式引導（新）
+
+**操作順序：** 下載 ZIP → 完整解壓縮 → 雙擊 `啟動PDF智慧影音.exe` → 確認 Python → 在使用者同意後安裝必要 pip 套件 → 自動開啟本機 HTML 與首次啟動精靈。
+
+精靈會依序引導四個階段：
+
+1. **基本製片**：確認 Python 本機服務、PDF.js、Web Audio 及瀏覽器 WebM 錄製能力。完成後可匯入 PDF、編輯逐頁旁白。
+2. **AI 文案（選用）**：可選 Ollama 或自己提供的 Free LLM API／其他 OpenAI 相容端點，直接在 HTML 介面填入 Base URL、模型 ID、API Key，按「儲存設定」後「測試 LLM 連線」。不使用 AI 仍可手動撰稿。
+3. **AI 中文配音**：按「測試臺灣中文配音」，確認 Edge-TTS 真正產生 MP3；正式匯出 WebM 前還需先為 PDF 各頁生成配音。
+4. **AI 影片／數位人（進階選裝）**：檢查 ComfyUI、GPU、FFmpeg、Ollama、磁碟及已審核的工作流；模型未安裝時提供官方連結，不會擅自下載數十 GB 權重。
+
+右上角的「首次啟動精靈」可隨時重開。離線說明頁位於 `pdf-ai-video-studio/desktop/setup-guide.html`；如果 Python 缺少或虛擬環境／pip 失敗，EXE 將嘗試開啟此頁，並提供 Python 官方下載網址。
+
+API Key 只會儲存在本機 `local-service/.env`，**這是明文設定檔，請保護資料夾及電腦帳號權限**；不會傳回瀏覽器或上傳 GitHub。金鑰可以不填（適用不需金鑰的 Ollama）。
+
+**重要限制：** 精靈能檢查、引導和測試基本服務，但 ComfyUI 的第三方節點、Wan2.2/MuseTalk/SadTalker 模型權重與 CUDA／PyTorch 相容性仍需使用者另外安裝及實際推論驗收，不能視為全自動模型安裝包。
+
 ## 第一次啟動（使用者不需手動輸入指令）
 
 1. 下載 Windows ZIP，**完整解壓縮**到可寫入的資料夾，例如文件資料夾。
@@ -13,7 +30,7 @@
 3. **未找到相容 Python**：顯示繁體中文提示及官方網址，按「是」開啟 https://www.python.org/downloads/windows/ 。請選 Python 3.12／3.13 的 Windows x64 安裝版本。安裝完成後重新啟動桌面版。
 4. **已有相容 Python**：程式在自己的 local-service/.venv 建立虛擬環境。若缺少 edge-tts、httpx 等套件，會先詢問同意，才從 PyPI 安裝。第一次操作需要網路。
 5. 服務成功啟動後，程式自動開啟 http://127.0.0.1:8765/pdf-ai-video-studio/ ，這是**只有本機可以使用的 HTML 網頁**，不是公開線上版本。
-6. 可匯入 PDF、編輯逐頁文案、產生 TTS、設定 BGM、分鏡及輸出 WebM；AI 撰稿可選用 Ollama 或自己的 OpenAI 相容 LLM API 設定。
+6. 在自動顯示的 HTML 精靈內檢查基本能力、設定與測試 LLM、測試 Edge-TTS；之後匯入 PDF、編輯逐頁稿、產生語音並輸出 WebM。
 
 **重要：** 這是「ZIP 可攜式桌面程式」，不是 MSI 安裝精靈。ZIP **未內建 Python**；Python 缺少時須由使用者自行安裝，不能只解壓 ZIP 就期待 Python 功能可執行。
 
@@ -64,7 +81,7 @@
 
 ## AI LLM 設定
 
-只需在下載的桌面版資料夾內，把 local-service/.env.example 複製成 local-service/.env，填入 LLM_BASE_URL、LLM_MODEL、LLM_API_KEY（視供應商要求）。
+可直接使用首次啟動精靈的表單儲存和測試 LLM。進階使用者也可自行將 local-service/.env.example 複製為 local-service/.env，填入 LLM_BASE_URL、LLM_MODEL、LLM_API_KEY。
 
 可使用 Ollama 本機 OpenAI 相容 API；或填入現有 Free LLM API 的真實端點、模型 ID 和統一金鑰。請勿把自己的 API 金鑰提交到公開 GitHub。
 
