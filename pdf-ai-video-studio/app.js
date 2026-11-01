@@ -52,6 +52,7 @@
     ui.play.disabled=!ready||!hasAudio();
     ui.export.disabled=!ready||!hasAudio()||!window.MediaRecorder||!ui.preview.captureStream;
     ui.stop.disabled=!state.playing;
+    ui.aspect.disabled=state.playing;ui.template.disabled=state.playing;
     ui.bgm.disabled=!ui.music.checked;
     ui.volume.disabled=!ui.music.checked;
     ui.info.textContent=state.pages.length?state.title+" · "+state.pages.length+" 頁 · "+state.pages.reduce((n,p)=>n+p.underlines.length,0)+" 個底線候選標記":"尚未選擇 PDF";
@@ -191,9 +192,9 @@
   }
   function dimensions(){
     const a=ui.aspect.value,c=ui.preview;
-    if(a==="9:16"){c.width=720;c.height=1280;}
-    else if(a==="1:1"){c.width=960;c.height=960;}
-    else {c.width=1280;c.height=720;}
+    const size=a==="9:16"?[720,1280]:(a==="1:1"?[960,960]:[1280,720]);
+    // NEVER resize an active captured canvas: MediaRecorder tracks can freeze.
+    if(c.width!==size[0] || c.height!==size[1]){c.width=size[0];c.height=size[1];}
   }
   function background(){
     const w=ui.preview.width,h=ui.preview.height,t=ui.template.value;
@@ -353,6 +354,7 @@
         state.recorder=mr;mr.start(1000);
       }
       ui.stop.disabled=false;ui.play.disabled=true;ui.export.disabled=true;ui.editor.disabled=true;
+      ui.aspect.disabled=true;ui.template.disabled=true;
       if(session.mg&&state.music){
         const target=Number(ui.volume.value)/100;
         session.mg.gain.setValueAtTime(0,session.context.currentTime);
@@ -456,5 +458,7 @@
   ui.stop.addEventListener("click",stopPlayback);
   window.addEventListener("beforeunload",()=>{for(const p of state.pages)revokeAudio(p);if(state.bgmURL)URL.revokeObjectURL(state.bgmURL);});
   if(typeof pdfjsLib!=="undefined")pdfjsLib.GlobalWorkerOptions.workerSrc="../pdf-voice-video/lib/pdf.worker.min.js";
+  ui.health.addEventListener("click",checkHealth);
+  window.addEventListener("focus",checkHealth);
   drawScene(0,0);checkHealth();
 })();
