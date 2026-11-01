@@ -1,97 +1,66 @@
-# PDF 智慧影音製作系統（PDF AI Video Studio）
+# PDF 智慧影音製作系統 — Windows 桌面版
 
-**正式入口：** https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/
+**本工具僅發布 Windows x64 可攜式桌面版。已取消原本的輕量線上操作版。** 使用者下載 ZIP，完整解壓縮後雙擊 EXE，即由本機伺服器開啟 HTML 工作台；原本的舊版 pdf-voice-video 不受影響。
 
-本工具是原創工具集的新程式，不會覆蓋原來的 PDF 轉語音影片模組。
+- **Windows 下載 ZIP**：https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/pdf-ai-video-studio-desktop.zip
+- **原創工具集首頁**：https://ymguan3-boop.github.io/original-tools/
+- **程式原始碼**：https://github.com/ymguan3-boop/original-tools/tree/main/pdf-ai-video-studio
 
-## 四大核心功能
+## 第一次啟動（使用者不需手動輸入指令）
 
-1. **AI 逐頁撰稿**：使用 PDF.js 擷取頁面文字；經本機服務呼叫使用者自己設定的 OpenAI 相容模型（例如 Free LLM API、Ollama），產生各頁可手動校訂的繁體中文講稿。
-2. **Edge-TTS 語音檔**：本機服務產生每頁 MP3，提供臺灣男聲、臺灣女聲、一般中文男聲，瀏覽器可直接將音訊合成影片，不必再分享整個螢幕錄取系統音訊。Edge-TTS 不需 API Key，但需連線 Microsoft 服務。
-3. **BGM 智慧混音**：使用者挑選自己擁有合法使用權的音樂，支援循環、開頭淡入，以及旁白時降低 BGM 音量，不需要音樂 API Key。
-4. **自動分鏡／影片模板**：每頁一個分鏡，以音檔長度控制換頁、字幕、畫面與音效，提供三款模板及 16:9、9:16、1:1，輸出含音軌的 WebM。
+1. 下載 Windows ZIP，**完整解壓縮**到可寫入的資料夾，例如文件資料夾。
+2. 雙擊「啟動PDF智慧影音.exe」。程式會先檢查**電腦是否有 Python 3.10–3.14**，優先使用 3.12 或 3.13。檢查的是可用的 Python 執行環境，不會自行變更其他應用程式的 Python。
+3. **未找到相容 Python**：顯示繁體中文提示及官方網址，按「是」開啟 https://www.python.org/downloads/windows/ 。請選 Python 3.12／3.13 的 Windows x64 安裝版本。安裝完成後重新啟動桌面版。
+4. **已有相容 Python**：程式在自己的 local-service/.venv 建立虛擬環境。若缺少 edge-tts、httpx 等套件，會先詢問同意，才從 PyPI 安裝。第一次操作需要網路。
+5. 服務成功啟動後，程式自動開啟 http://127.0.0.1:8765/pdf-ai-video-studio/ ，這是**只有本機可以使用的 HTML 網頁**，不是公開線上版本。
+6. 可匯入 PDF、編輯逐頁文案、產生 TTS、設定 BGM、分鏡及輸出 WebM；AI 撰稿可選用 Ollama 或自己的 OpenAI 相容 LLM API 設定。
 
-並保留 PDF 底線候選標記導讀、自訂逐頁旁白、PDF 原始圖表比例與逐頁文字稿下載。
+**重要：** 這是「ZIP 可攜式桌面程式」，不是 MSI 安裝精靈。ZIP **未內建 Python**；Python 缺少時須由使用者自行安裝，不能只解壓 ZIP 就期待 Python 功能可執行。
 
-## Windows 桌面版（新！）
+## 程式依賴項目與檢查方式
 
-**直接下載：** https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/pdf-ai-video-studio-desktop.zip
+| 項目 | 何時需要 | 如何檢查 | 若缺少 |
+|---|---|---|---|
+| Python 3.10–3.14 | 本機 HTML 服務、AI 文案、Edge-TTS | EXE 啟動時偵測 Python 版本 | 會彈出視窗提供 [Python 官方 Windows 下載](https://www.python.org/downloads/windows/) |
+| edge-tts / httpx | 文字語音轉檔及 LLM | EXE 檢查獨立 venv 裡的套件 | 取得使用者同意後由 pip 安裝 |
+| ComfyUI | 只有 AI 影片／數位人選裝模型才需要 | HTML 工作台測試 127.0.0.1:8188 的本機 ComfyUI API | 顯示未連線，提供 [ComfyUI 官方下載](https://www.comfy.org/download) |
+| Wan2.2／MuseTalk／SadTalker 權重與 API 工作流 | 使用該模型時才需要 | HTML 顯示對應工作流是否就緒；須實際測試模型 | 依下方官方連結自行安裝與確認權重授權 |
 
-1. 從「原創工具集」點擊「下載 Windows 桌面版 ZIP」；解壓縮**整包檔案**，不要只複製 EXE。
-2. **雙擊「啟動PDF智慧影音.exe」**。Windows 圖形啟動器會依序檢查 Python 3.10–3.14 是否已安裝；優先選擇 Python 3.12/3.13。
-3. **若找不到 Python**，會跳出繁體中文提示視窗，點「是」將自動開啟官方 Python Windows 下載頁：
-   https://www.python.org/downloads/windows/
-   建議安裝 **Python 3.12 或 3.13** 以兼容本地 AI 工具。安裝後請關閉並重新執行啟動器。
-4. **若已有 Python**，程式自動建立獨立 .venv；需要安裝 Edge-TTS/httpx 時會再次**詢問同意**，才會透過 pip 下載到該虛擬環境。
-5. 啟動器自動開啟 `http://127.0.0.1:8765/pdf-ai-video-studio/` 的 HTML 製片介面。無須額外開啟終端機，也不必在瀏覽器設定系統音訊分享。
-6. AI 文案需在本機 `pdf-ai-video-studio/local-service/.env` 填寫你的 LLM 設定；可使用 Ollama 或現有相容的 Free LLM API。Edge-TTS 不需要 LLM Key，但需要網路。
-7. AI 影片與數位人是**選裝**：需要獨立安裝 ComfyUI、本機模型和經審核的 API 工作流。初始 ZIP 不含模型權重，也不會在沒有同意下下載大型模型。
+**ComfyUI 未連線 ≠ 一定未安裝。** 若已安裝 ComfyUI 但沒有啟動，請先啟動；若 Desktop 版未使用 8188 埠，需依本系統支援的本機 ComfyUI API 埠設定。**ComfyUI Desktop 及官方 Portable 可能自行附帶或管理 Python**，不代表它一定需要額外安裝系統 Python；本程式自己的 EXE 啟動器仍會獨立檢查 Python。
 
-**下載檔和 Python 注意：** 這是 Windows x64 可攜式 ZIP，不是 MSI 安裝程式；**沒有內建 Python**，因此才設計上述檢測與導向官方下載流程。不需要系統管理員權限安裝到系統目錄；建議解壓縮至可寫入的使用者文件資料夾。如啟動不成功，可查看 ZIP 解壓縮目錄的 `pdf-studio-launch.log`。如電腦已有其他程式占用本機 8765 連接埠，需先處理衝突。
+模型官方來源：
+- ComfyUI：https://www.comfy.org/download
+- Wan2.2：https://github.com/Wan-Video/Wan2.2
+- MuseTalk：https://github.com/TMElyralab/MuseTalk
+- SadTalker：https://github.com/OpenTalker/SadTalker
 
-## 可選 AI 影片與數位人模型
+模型及工作流是**可選裝項目**，不會在未經同意下偷偷下載數十 GB。進階模型需確認 GPU 顯存、磁碟、第三方節點與使用授權。
 
-- **Wan2.2**：PDF 畫面衍生示意動畫，需相容的本機 ComfyUI API 工作流。官方模型： https://github.com/Wan-Video/Wan2.2
-- **MuseTalk**：已獲肖像授權的人像搭配原本配音，建立對嘴講解影片。官方模型： https://github.com/TMElyralab/MuseTalk
-- **SadTalker**：參考人像與語音的照片口播。官方模型： https://github.com/OpenTalker/SadTalker
+## 功能內容
 
-**模型目前不會自動安裝。** 需在 ComfyUI 成功測試模型、將受信任的 **API format** 工作流放入 `local-service/workflows/wan22.json`、`musetalk.json` 或 `sadtalker.json`，再使用網頁的「檢查 GPU／模型」與「產生目前頁面 AI 影片」功能。工作流必須包含 `__PROMPT__` 佔位值；需要圖或音檔則使用 `__IMAGE__`、`__AUDIO__`。可參考 `local-service/workflows/README.md`。
+1. AI 逐頁口語文案：PDF.js 擷取可讀文字，LLM 建議文案需人工核對數據、圖表和法令。
+2. Edge-TTS：支援臺灣中文男／女聲，直接生成 MP3 並混合入錄影音軌，毋須分享螢幕系統音訊。Edge-TTS 不需 API Key，但需要連網並傳送旁白文字給服務方。
+3. BGM：使用者自行選擇有合法授權的音樂，支援循環、音量調整和配音時降低音樂音量。
+4. 逐頁分鏡與影片模板：三種 HTML 模板、16:9／9:16／1:1，保留原始 PDF 比例，以 Canvas + MediaRecorder 輸出 WebM。
+5. 選裝 AI 動態影片／數位人：連接本機 ComfyUI，提交使用者審核過的 API format 工作流；可將產出影片作為逐頁「AI 生成示意」，不得當成正式查核證據。
 
-桌面版會檢查 NVIDIA 顯示卡資訊和 ComfyUI 的執行狀態。若 GPU 不足或未裝模型，原本的 PDF、AI 文案、Edge-TTS、BGM 和 WebM 功能仍能獨立使用。
+**目前不保證**所有 Wan2.2／MuseTalk／SadTalker 工作流已安裝或已完成端到端驗證。工作流放在 local-service/workflows/，詳見當中的 README。此 ZIP 不含模型權重，亦沒有自動下載模型的安裝精靈。
 
-**目前的能力界線：** 已建立 ComfyUI 工作流排隊、狀態查詢、影片讀取、逐頁畫中畫及標明「AI 生成示意」的播放與錄製介面；**沒有**將各模型推論環境、全部模型權重和通用成功工作流內建在 ZIP。不同模型的實際嘴型品質、影音時長及節點適配，仍需依硬體逐項驗收。
+## AI LLM 設定
 
-## GitHub Pages 使用方式
+只需在下載的桌面版資料夾內，把 local-service/.env.example 複製成 local-service/.env，填入 LLM_BASE_URL、LLM_MODEL、LLM_API_KEY（視供應商要求）。
 
-開啟上方網址，匯入 PDF，選擇旁白來源、語音、背景音樂與模板。
+可使用 Ollama 本機 OpenAI 相容 API；或填入現有 Free LLM API 的真實端點、模型 ID 和統一金鑰。請勿把自己的 API 金鑰提交到公開 GitHub。
 
-**不啟動本機服務：** 可檢視 PDF、建立並編輯逐頁文案、調整分鏡畫面及下載文字稿。
+## 資安與限制
 
-**啟動本機服務：** 能以 AI 生成講稿、Edge-TTS 製作 MP3，進而播放及下載有聲 WebM。
-
-請注意：GitHub Pages 不會執行 Python；AI 和語音並非無須後端即可工作的假按鈕。瀏覽器本身不儲存 API Key。
-
-## 安裝本機服務（Windows）
-
-1. 安裝 Python 3.10 或更新版。
-2. 開啟原始碼的 pdf-ai-video-studio/local-service 資料夾。
-3. 如需 AI 撰稿，將 .env.example 複製為 .env，填入 LLM_BASE_URL、LLM_MODEL，以及該供應商要求的 LLM_API_KEY。
-4. 雙擊 start.bat。首次啟動會建立獨立 .venv 並安裝必要依賴。
-5. 保持命令列視窗開啟，再開啟上述 GitHub Pages 網址；右上本機狀態按鈕可以重新檢查連線。
-6. 操作順序：匯入 PDF → AI 撰稿或自訂 → 核對文案 → 產生旁白 → 加入 BGM → 選擇模板 → 預覽 → 匯出影片。
-
-macOS / Linux：在本機終端執行 sh local-service/start.sh。
-
-### 可選的 LLM 設定
-
-- Ollama：LLM_BASE_URL=http://127.0.0.1:11434/v1；LLM_MODEL=llama3.2；LLM_API_KEY 可以留白。要先安裝 Ollama 並下載模型。
-- Free LLM API：必須填入你現有供應商真正提供的 OpenAI 相容 Base URL、模型 ID 及實際統一金鑰。這裡不會臆測未核對的 API 網址。
-- 其他支援 OpenAI Chat Completions 格式的 HTTPS 服務亦可使用。
-
-## 本機整站測試
-
-在 original-tools 倉庫根目錄先執行 python -m http.server 8777，開啟 http://127.0.0.1:8777/pdf-ai-video-studio/ ，並另外啟動 local-service 的本機服務。
-
-## 資安與隱私
-
-- PDF 檔案與 BGM 音檔只在瀏覽器處理，不上傳本機服務。AI 撰稿時才會把頁面文字交給本機服務，並由本機服務傳至所設定的 LLM。TTS 會把旁白文字送至 Microsoft 線上語音服務。
-- 涉及未公開審計案件、個資或保密文件時，必須有權使用外部服務；否則請選擇合規的本機模型／語音處理方式。
-- 本機服務只監聽 127.0.0.1:8765，有 Origin 白名單、語音白名單、JSON 大小限制；沒有任意路徑下載 API；切勿將它開放到公網。
-- 真正的金鑰僅由 local-service/.env 或本機環境變數讀取；請勿將 .env 上傳到 GitHub。
-- 只部署 index.html、style.css、app.js 至 GitHub Pages，Python 本機服務不隨網站公開部署。
-- 參考 Pixelle-Video 的模組化思路，沒有複製其未修補的 FastAPI 檔案存取路由。參考來源：https://github.com/ATH-MaaS/Pixelle-Video （Apache-2.0）。
-- 若瀏覽器的 Local Network Access 政策阻止 GitHub Pages 連接 localhost，可改用前述本機整站測試方式；不要關閉安全保護。
-
-## 技術及限制
-
-- 影片目前輸出 WebM（依瀏覽器可用 VP9/Opus 或 VP8/Opus），不是 MP4。
-- PDF.js 僅擷取可讀文字。掃描版 PDF 沒有 OCR；圖片／圖表不傳送給 LLM，生成內容必須人工核對。
-- 底線為矩形幾何的候選偵測，不保證所有 PDF 版面都能正確擷取。
-- Edge-TTS 回傳字詞時間標記，現階段字幕使用分鏡音檔進度估算切換，不是嚴格逐字強制對齊。
-- 須以桌面 Chrome / Edge 驗證 MediaRecorder、WebM、背景音樂及本機服務。行動版可能不支援某些功能。
-- Web 頁面共用舊版 pdf-voice-video/lib 的 PDF.js 主程式和 worker，不另複製大型函式庫。
-- tests/test_security.py 提供簡易白名單／URL 安全測試，CI 另檢查 JavaScript、Python 語法。仍需在真實瀏覽器做端到端測試。
+- 只在本機 127.0.0.1:8765 開啟 HTML 工作台，前端沒有線上部署；本機 API 經限制 Host、Origin 和檔案路徑。
+- 原始 PDF 與 BGM 保留於本機瀏覽器；AI 撰稿會把選取的 PDF 文字交給自訂 LLM，Edge-TTS 傳送旁白文字到語音服務。如選擇 ComfyUI，則會將選定的圖片及配音傳入本機 ComfyUI。
+- 工作流應自行審核與測試；不要使用不明第三方節點、自動安裝未知的程式碼或執行來路不明的安裝包。
+- 掃描影像 PDF 沒有 OCR；AI 文案不應擅自解讀 PDF 中無法擷取的工程圖表。
+- 現階段輸出 WebM，不是 MP4；瀏覽器與顯示卡支援度仍需實際 Windows 測試。
+- 已有 GitHub Actions 的 JavaScript、Python 安全單元測試和 Windows EXE 編譯／ZIP 組包檢查。**自動建置成功不等於所有使用者電腦都已完成端到端驗收。**
 
 ## 創作者與授權
 
-創作者：官毅明。原創工具集為 MIT；第三方語音模型、音樂、PDF 及各模型 API 遵循各自授權與使用條款。
+創作者：官毅明。原創工具集採 MIT 授權；ComfyUI、模型權重、聲音與素材各依其授權使用。
