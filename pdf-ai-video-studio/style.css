@@ -48,3 +48,8 @@
 .voice-clone-options p{line-height:1.6}
 .voice-clone-options a{color:#a5d9ff;display:block;margin-top:10px}
 .voice-clone-options input[type=file]{max-width:100%;font-size:12px}
+
+/* GPU/CPU preflight report visible before optional model downloads. */
+.hardware-preflight{margin:12px 0;padding:12px 14px;border:1px solid #385b78;border-radius:10px;background:#102c42;color:#d8eaff;font-size:12px;line-height:1.7;white-space:pre-line;overflow-wrap:anywhere}
+.hardware-preflight.warning{border-color:#956844;background:#37281e;color:#ffe6c8}
+.hardware-preflight.ok{border-color:#367a6b;background:#103b33;color:#d5fff0}
