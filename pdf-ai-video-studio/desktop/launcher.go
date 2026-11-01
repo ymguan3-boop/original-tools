@@ -6,6 +6,8 @@ package main
 
 import (
 	"errors"
+	"encoding/json"
+	"io"
 	"fmt"
 	"net/http"
 	"os"
@@ -72,11 +74,18 @@ func runWait(parts []string, log *os.File, args ...string) error {
 	return cmd.Run()
 }
 func running() bool {
-	client := http.Client{Timeout:700*time.Millisecond}
+	// Require our own app health marker, not merely any process occupying 8765.
+	client := http.Client{Timeout:1200*time.Millisecond}
 	res, err := client.Get("http://127.0.0.1:8765/health")
 	if err != nil { return false }
 	defer res.Body.Close()
-	return res.StatusCode == 200
+	if res.StatusCode != http.StatusOK { return false }
+	var payload struct {
+		OK bool `json:"ok"`
+		Desktop bool `json:"desktop"`
+	}
+	reader := io.LimitReader(res.Body, 8192)
+	return json.NewDecoder(reader).Decode(&payload) == nil && payload.OK && payload.Desktop
 }
 func fail(message string) { dialog("PDF 智慧影音製作系統", message, 0x10) }
 func main() {
