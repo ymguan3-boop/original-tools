@@ -6,6 +6,8 @@ Only loopback ComfyUI is permitted. No arbitrary filesystem path from clients.
 from __future__ import annotations
 import base64
 import json
+import os
+import time
 from pathlib import Path
 import re
 import shutil
@@ -66,6 +68,45 @@ def preflight_tools():
         }
     }
 
+def hardware_preflight():
+    """Read the latest Windows EXE hardware scan, never expose host file paths."""
+    report_file=WORKFLOWS.parent/".hardware-report.json"
+    result={
+        "checked_at": None, "logical_cores": os.cpu_count(),
+        "physical_cores": None, "cpu_name": "未由 Windows EXE 檢測",
+        "ram_gb": None, "free_disk_gb": None, "gpu_names": [],
+        "nvidia_vram_gb": None, "basic_ready": None,
+        "basic_recommended": None, "advanced_tier": "unknown",
+        "notes": ["請透過 Windows EXE 啟動器執行硬體檢查"]
+    }
+    try:
+        if not report_file.is_file() or report_file.stat().st_size>8192:
+            return result
+        if time.time()-report_file.stat().st_mtime>24*3600:
+            return result
+        data=json.loads(report_file.read_text(encoding="utf-8"))
+        if not isinstance(data,dict) or data.get("version")!=1:return result
+        for key in result:
+            if key in data and isinstance(data[key],type(result[key])) and key not in ("logical_cores","notes"):
+                result[key]=data[key]
+        if isinstance(data.get("logical_cores"),int) and 1<=data["logical_cores"]<=1024:
+            result["logical_cores"]=data["logical_cores"]
+        if isinstance(data.get("gpu_names"),list):
+            result["gpu_names"]=[str(x)[:100] for x in data["gpu_names"][:8] if isinstance(x,str)]
+        if isinstance(data.get("notes"),list):
+            result["notes"]=[str(x)[:240] for x in data["notes"][:8] if isinstance(x,str)]
+        for key in ("ram_gb","free_disk_gb","nvidia_vram_gb"):
+            if isinstance(data.get(key),(int,float)) and 0<=data[key]<=1048576:
+                result[key]=round(float(data[key]),1)
+        if isinstance(data.get("physical_cores"),int) and 1<=data["physical_cores"]<=1024:
+            result["physical_cores"]=data["physical_cores"]
+        # Explicit boolean check: false and integer zero must not be confused.
+        for key in ("basic_ready","basic_recommended"):
+            if type(data.get(key)) is bool:result[key]=data[key]
+    except (OSError,ValueError,TypeError,UnicodeError):
+        return result
+    return result
+
 def status():
     alive=False
     try:
@@ -81,6 +122,7 @@ def status():
         "comfyui_download_url": "https://www.comfy.org/download",
         "python_download_url": "https://www.python.org/downloads/windows/",
         "hardware": vram(),
+        "system_preflight": hardware_preflight(),
         "engines": [
             dict(id=key,label=spec["label"],repo=spec["repo"],workflow_ready=(WORKFLOWS/spec["workflow"]).is_file(),min_vram_gb=spec["min_vram"])
             for key,spec in ENGINES.items()
