@@ -153,39 +153,32 @@ func assessHardware(base string) machineReport {
 }
 
 func hardwareMessage(r machineReport) string {
-    gpu:="尚未確認具可用的 NVIDIA 加速 GPU"
-    if len(r.GPU)>0 {gpu=strings.Join(r.GPU,", ")}
-    if r.NVIDIAVRAMGB>0 {gpu+=fmt.Sprintf("（NVIDIA VRAM %.1f GB）",r.NVIDIAVRAMGB)}
+    gpu := "尚未確認可用的 NVIDIA 加速 GPU"
+    if len(r.GPU)>0 { gpu=strings.Join(r.GPU,", ") }
+    if r.NVIDIAVRAMGB>0 { gpu+=fmt.Sprintf("（NVIDIA VRAM %.1f GB）",r.NVIDIAVRAMGB) }
     cpu:=fmt.Sprintf("%d 邏輯核心",r.LogicalCores)
-    if r.PhysicalCores>0 {cpu=fmt.Sprintf("%d 實體 / %d 邏輯核心",r.PhysicalCores,r.LogicalCores)}
-    normal:="可使用基本 PDF 製片"
-    if !r.BasicReady {normal="基本製片規格低於建議最低門檻，可能無法順利執行"}
-    detail:="重量級 AI 模型不建議啟用（仍可使用基本配音及 PDF 製片）"
-    if r.AdvancedTier=="high" {detail="可能適合高階本機影片生成；仍須驗證 CUDA、模型與推論"}
-    if r.AdvancedTier=="medium" {detail="可嘗試部分低 VRAM AI 模型；需實際驗證"}
-    if r.AdvancedTier=="gpu-unverified" {detail="偵測到顯示卡，但加速能力／VRAM 尚未核實"}
-    result:=fmt.Sprintf("CPU：%s
+    if r.PhysicalCores>0 { cpu=fmt.Sprintf("%d 實體 / %d 邏輯核心",r.PhysicalCores,r.LogicalCores) }
+    normal:="可嘗試基本 PDF 製片"
+    if !r.BasicReady { normal="基本製片規格低於最低評估門檻，可能無法順利執行" }
+    detail:="重量級 AI 模型不建議啟用（基本 PDF 製片仍可嘗試）"
+    if r.AdvancedTier=="high" { detail="可進一步測試高階影片模型；仍須驗證 CUDA、模型與推論" }
+    if r.AdvancedTier=="medium" { detail="可嘗試部分低 VRAM AI 模型；仍須實際測試" }
+    if r.AdvancedTier=="gpu-unverified" { detail="有顯示卡，但加速能力／VRAM 尚未核實" }
+    result:=fmt.Sprintf(`CPU：%s
 記憶體：%.1f GB
 顯示卡：%s
 所在磁碟剩餘：%.1f GB
 
-"+
-        "基本功能：%s
+基本功能：%s
 進階 AI：%s
 
-"+
-        "此為首次啟動硬體預檢，非模型速度保證。
-是否繼續啟動？",
-        cpu,r.RAMGB,gpu,r.FreeDiskGB,normal,detail)
+此為硬體規格預檢，非模型執行速度保證。
+是否繼續啟動？`, cpu,r.RAMGB,gpu,r.FreeDiskGB,normal,detail)
     if len(r.Notes)>0 {
-        result=strings.Replace(result,"此為首次啟動硬體預檢",strings.Join(r.Notes,"
-")+"
-
-此為硬體預檢",1)
+        result+="\n\n注意事項：\n"+strings.Join(r.Notes,"\n")
     }
     return result
 }
-
 func runHardwarePreflight(base string) bool {
     reportPath:=filepath.Join(base,"pdf-ai-video-studio","local-service",".hardware-report.json")
     r:=assessHardware(base)
