@@ -112,7 +112,9 @@ jobs:
           test -s image-audit/desktop-build/legacy-model.zip
 
       - name: Check PDF AI Studio frontend syntax
-        run: node --check pdf-ai-video-studio/app.js
+        run: |
+          node --check pdf-ai-video-studio/app.js
+          node pdf-ai-video-studio/tests/test-onboarding.cjs
 
       - name: Validate PDF AI Studio local service and security tests
         run: |
@@ -162,6 +164,7 @@ jobs:
           ]
           with ZipFile(output,'w',ZIP_DEFLATED,compresslevel=9) as z:
               z.write('pdf-ai-video-studio/desktop-build/啟動PDF智慧影音.exe',arcname='啟動PDF智慧影音.exe')
+              z.write('pdf-ai-video-studio/desktop/setup-guide.html',arcname='pdf-ai-video-studio/desktop/setup-guide.html')
               for name in files:
                   p=root/name
                   assert p.is_file(), f'Missing desktop file: {name}'
@@ -179,6 +182,7 @@ jobs:
               assert not any(name.endswith('/.env') or '/.venv/' in name or '/models/' in name for name in names)
               assert 'pdf-ai-video-studio/index.html' in names, 'HTML must be inside desktop ZIP'
               assert 'pdf-ai-video-studio/local-service/engine_service.py' in names
+              assert 'pdf-ai-video-studio/desktop/setup-guide.html' in names, 'Offline Python installation guide must ship'
           # Do not accidentally reintroduce an online version of this desktop-only tool.
           published=list(Path('deploy/pdf-ai-video-studio').iterdir())
           assert published==[output], f'Only desktop ZIP can be published: {published}'
