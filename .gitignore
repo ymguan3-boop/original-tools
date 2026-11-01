@@ -22,3 +22,8 @@ image-audit/tests/engineering_photo_private_benchmark*.zip
 工程驗收照片資料集.zip
 engineering_photo_private_benchmark*.zip
 __pycache__/
+
+# PDF AI Studio private keys and local environment
+pdf-ai-video-studio/local-service/.env
+pdf-ai-video-studio/local-service/.venv/
+pdf-ai-video-studio/local-service/*.log
