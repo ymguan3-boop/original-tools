@@ -115,6 +115,7 @@ class SecurityTests(unittest.TestCase):
                 }
                 path.write_text(json.dumps(data),encoding="utf-8")
                 got=engine_service.hardware_preflight()
+                self.assertEqual(got["checked_at"],"2026-11-01T09:00:00Z")
                 self.assertEqual(got["logical_cores"],16)
                 self.assertEqual(got["ram_gb"],31.8)
                 self.assertTrue(got["basic_ready"])
