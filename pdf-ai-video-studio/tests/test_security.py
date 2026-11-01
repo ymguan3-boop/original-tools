@@ -19,7 +19,8 @@ class SecurityTests(unittest.TestCase):
         self.assertTrue(module.valid_url("http://127.0.0.1:11434/v1"))
         self.assertFalse(module.valid_url("http://192.168.1.10:11434/v1"))
     def test_exact_origin(self):
-        self.assertIn("https://ymguan3-boop.github.io",module.ORIGINS)
+        self.assertIn("http://127.0.0.1:8765",module.ORIGINS)
+        self.assertNotIn("https://ymguan3-boop.github.io",module.ORIGINS)
         self.assertNotIn("https://untrusted.example",module.ORIGINS)
     def test_tts_allowlist(self):
         self.assertIn("zh-TW-YunJheNeural",module.VOICES)
@@ -44,6 +45,20 @@ class SecurityTests(unittest.TestCase):
         self.assertNotIn("/pdf-ai-video-studio/local-service/.env",module.STATIC)
         self.assertIn("/pdf-ai-video-studio/index.html",module.STATIC)
         self.assertIn("/pdf-voice-video/lib/pdf.min.js",module.STATIC)
+
+    def test_desktop_python_and_comfyui_metadata(self):
+        import engine_service
+        self.assertTrue(module.STATIC["/pdf-ai-video-studio/index.html"][0].name=="index.html")
+        self.assertEqual(engine_service.BASE,"http://127.0.0.1:8188")
+        self.assertTrue(engine_service.status()["python"]["installed"])
+        self.assertEqual(engine_service.status()["comfyui_download_url"],"https://www.comfy.org/download")
+    def test_block_nonlocal_host(self):
+        class Fake:
+            headers={"Host":"evil.test:8765","Origin":None}
+        self.assertFalse(module.Handler.allowed(Fake()))
+        class Local:
+            headers={"Host":"127.0.0.1:8765","Origin":"http://127.0.0.1:8765"}
+        self.assertTrue(module.Handler.allowed(Local()))
 
 if __name__=="__main__":
     unittest.main()
