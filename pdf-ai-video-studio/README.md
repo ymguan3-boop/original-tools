@@ -14,7 +14,7 @@
 
 1. **基本製片**：確認 Python 本機服務、PDF.js、Web Audio 及瀏覽器 WebM 錄製能力。完成後可匯入 PDF、編輯逐頁旁白。
 2. **AI 文案（選用）**：可選 Ollama 或自己提供的 Free LLM API／其他 OpenAI 相容端點，直接在 HTML 介面填入 Base URL、模型 ID、API Key，按「儲存設定」後「測試 LLM 連線」。不使用 AI 仍可手動撰稿。
-3. **AI 中文配音**：按「測試臺灣中文配音」，確認 Edge-TTS 真正產生 MP3；正式匯出 WebM 前還需先為 PDF 各頁生成配音。
+3. **AI 中文配音**：可試聽 Edge-TTS，或選用 Index-TTS2 上傳自己授權的聲音樣本並確認試聽。正式匯出 WebM 前需先為各頁生成音檔。
 4. **AI 影片／數位人（進階選裝）**：檢查 ComfyUI、GPU、FFmpeg、Ollama、磁碟及已審核的工作流；模型未安裝時提供官方連結，不會擅自下載數十 GB 權重。
 
 右上角的「首次啟動精靈」可隨時重開。離線說明頁位於 `pdf-ai-video-studio/desktop/setup-guide.html`；如果 Python 缺少或虛擬環境／pip 失敗，EXE 將嘗試開啟此頁，並提供 Python 官方下載網址。
@@ -69,10 +69,23 @@ API Key 只會儲存在本機 `local-service/.env`，**這是明文設定檔，�
 
 模型及工作流是**可選裝項目**，不會在未經同意下偷偷下載數十 GB。進階模型需確認 GPU 顯存、磁碟、第三方節點與使用授權。
 
+## 自訂聲音複製：Index-TTS2（新增）
+
+除了既有的 Edge-TTS 免費臺灣男／女聲，配音區新增 **Index-TTS2 · 複製自己的聲音**：
+
+1. 在「語音生成方式」選擇 Index-TTS2。本功能與 Edge-TTS 分開，可隨時切換；原本的 LLM 文案、PDF 分鏡、BGM、WebM 都保留。
+2. 安裝並啟動本機 ComfyUI（127.0.0.1:8188），安裝 **IndexTTS2BaseNode、VHS_LoadAudioUpload、SaveAudioMP3** 所需的可信節點與 Index-TTS2 模型。ZIP 已內建改編自 Pixelle-Video 的 `local-service/workflows/tts_index2.json` 範本，但**不包含模型權重或自訂節點**。詳細參考 [INDEXTTS2.md](local-service/workflows/INDEXTTS2.md)。
+3. 上傳**自己或已取得明確授權的人聲** WAV／MP3／FLAC（最多 8MB），勾選聲音使用權與上傳同意，點「上傳並確認聲線」。
+4. 先點 **「試聽自訂聲線」**；ComfyUI 會執行模型，生成短音檔，確認品質後才開始整份 PDF 配音。若模型沒有正確安裝，會呈現具體錯誤。
+5. 匯入 PDF，依需要編輯逐頁文案；點「產生所有頁面旁白音檔」，系統會逐頁交由本機 Index-TTS2 推論，沿用原本的字幕、BGM、影音錄製流程。現階段每頁 Index-TTS2 **限 600 字**，長頁請先精簡或分頁。
+6. 如不想使用聲線複製，切回 **Edge-TTS** 即可，不需 ComfyUI。
+
+**本機資料保留與安全：** 上傳參考錄音與生成結果會留在使用者的 ComfyUI input / output 目錄，關閉程式不會自動刪除，請自行在 ComfyUI 清除不再使用的素材。聲音不得用於未經同意的冒充。不得將 ComfyUI 8188 埠公開到網路。模型節點存在不代表權重正確；只有**實際成功生成試聽音檔**後才能確認可用。Index-TTS2 參考工作流的 Apache-2.0 授權與修改記錄已隨 ZIP 收錄於 `third-party/`。
+
 ## 功能內容
 
 1. AI 逐頁口語文案：PDF.js 擷取可讀文字，LLM 建議文案需人工核對數據、圖表和法令。
-2. Edge-TTS：支援臺灣中文男／女聲，直接生成 MP3 並混合入錄影音軌，毋須分享螢幕系統音訊。Edge-TTS 不需 API Key，但需要連網並傳送旁白文字給服務方。
+2. Edge-TTS 與 Index-TTS2：預設臺灣中文男／女聲、選裝本機聲線複製，直接生成旁白音檔混入錄影。Edge-TTS 會送文字至 Microsoft；Index-TTS2 使用本機 ComfyUI，但會保留錄音素材。
 3. BGM：使用者自行選擇有合法授權的音樂，支援循環、音量調整和配音時降低音樂音量。
 4. 逐頁分鏡與影片模板：三種 HTML 模板、16:9／9:16／1:1，保留原始 PDF 比例，以 Canvas + MediaRecorder 輸出 WebM。
 5. 選裝 AI 動態影片／數位人：連接本機 ComfyUI，提交使用者審核過的 API format 工作流；可將產出影片作為逐頁「AI 生成示意」，不得當成正式查核證據。
