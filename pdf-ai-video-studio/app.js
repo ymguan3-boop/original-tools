@@ -15,6 +15,7 @@
     clock:$("clock"),log:$("log"),health:$("serverStatus"),
     restore:$("restoreText"),download:$("downloadScript"),
     engine:$("aiEngine"),engineCheck:$("engineCheck"),engineInfo:$("engineDetails"),
+    pythonStatus:$("pythonStatus"),comfyStatus:$("comfyStatus"),
     clipPrompt:$("aiPrompt"),reference:$("referenceImage"),clipGenerate:$("generateAIClip"),
     clipStatus:$("engineResult")
   };
@@ -458,6 +459,8 @@
   async function checkAIEngine(){
     if(!state.service){
       state.engineStatus=null;
+      ui.pythonStatus.textContent="未連線；請雙擊桌面版 EXE 執行檢查";
+      ui.comfyStatus.textContent="無法檢測；請先啟動桌面版";
       ui.engineInfo.textContent="本機服務未連線。請使用桌面版啟動器。";
       updateUI();return;
     }
@@ -466,6 +469,12 @@
       const result=await r.json();
       if(!r.ok)throw new Error(result.error||"本機 AI 服務錯誤");
       state.engineStatus=result;
+      ui.pythonStatus.textContent=result.python?.installed
+        ? "已偵測 Python "+result.python.version+"（桌面版本機環境）"
+        : "無法確認 Python；請從官方網站下載";
+      ui.comfyStatus.textContent=result.comfyui_ready
+        ? "本機 ComfyUI API 已連線（127.0.0.1:8188）"
+        : "尚未偵測到執行中的 ComfyUI；如已安裝，請先啟動";
       const gpu=result.hardware?.gpu
         ?result.hardware.name+" · "+Math.round(result.hardware.vram_mb/1024)+"GB VRAM"
         :"未偵測 NVIDIA GPU（仍可使用一般 PDF 製片）";
@@ -474,6 +483,8 @@
       updateUI();
     }catch(e){
       state.engineStatus=null;
+      ui.pythonStatus.textContent="本機環境狀態無法取得";
+      ui.comfyStatus.textContent="ComfyUI 連線檢查失敗";
       ui.engineInfo.textContent="無法確認 ComfyUI：" + e.message;
       updateUI();
     }
