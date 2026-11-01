@@ -30,14 +30,42 @@ def vram():
     binary = shutil.which("nvidia-smi")
     if not binary: return {"gpu": False, "name": None, "vram_mb": None}
     try:
-        p = subprocess.run([binary,"--query-gpu=name,memory.total","--format=csv,noheader,nounits"], capture_output=True,text=True,timeout=3,check=True)
+        p = subprocess.run([binary,"--query-gpu=name,memory.total,driver_version","--format=csv,noheader,nounits"], capture_output=True,text=True,timeout=3,check=True)
         first = p.stdout.splitlines()[0].split(",")
-        return {"gpu": True, "name": first[0].strip(), "vram_mb": int(first[1].strip())}
+        return {"gpu": True, "name": first[0].strip(), "vram_mb": int(first[1].strip()), "driver": first[2].strip() if len(first)>2 else None}
     except (OSError, ValueError, IndexError, subprocess.SubprocessError):
         return {"gpu": False, "name": None, "vram_mb": None}
 def client():
     if httpx is None: raise ValueError("缺少 httpx，請完成本機啟動器套件安裝")
     return httpx.Client(timeout=15,follow_redirects=False,trust_env=False)
+def preflight_tools():
+    # PATH checks are advisory. ComfyUI may bundle private binaries instead.
+    ffmpeg = shutil.which("ffmpeg")
+    git = shutil.which("git")
+    try:
+        free_gb = round(shutil.disk_usage(str(WORKFLOWS.parent)).free/1073741824, 1)
+    except OSError:
+        free_gb = None
+    ollama = False
+    if httpx is not None:
+        try:
+            with httpx.Client(timeout=1.2,follow_redirects=False,trust_env=False) as c:
+                ollama = c.get("http://127.0.0.1:11434/api/tags").status_code == 200
+        except (httpx.RequestError, ValueError):
+            pass
+    return {
+        "ffmpeg_in_path": bool(ffmpeg),
+        "git_in_path": bool(git),
+        "ollama_api_ready": ollama,
+        "free_disk_gb": free_gb,
+        "links": {
+            "ffmpeg": "https://ffmpeg.org/download.html",
+            "ollama": "https://ollama.com/download/windows",
+            "edge": "https://www.microsoft.com/edge/download",
+            "nvidia_driver": "https://www.nvidia.com/zh-tw/drivers/"
+        }
+    }
+
 def status():
     alive=False
     try:
@@ -48,6 +76,7 @@ def status():
         pass
     return {
         "comfyui_ready": alive,
+        "dependencies": preflight_tools(),
         "python": {"installed": True, "version": ".".join(str(x) for x in sys.version_info[:3]), "path": sys.executable},
         "comfyui_download_url": "https://www.comfy.org/download",
         "python_download_url": "https://www.python.org/downloads/windows/",
