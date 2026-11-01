@@ -103,6 +103,8 @@ func main() {
 	server := filepath.Join(base, "pdf-ai-video-studio", "local-service", "server.py")
 	requirements := filepath.Join(base, "pdf-ai-video-studio", "local-service", "requirements.txt")
 	if _, err := os.Stat(server); err != nil { fail("缺少本機 AI 服務檔案。請完整解壓縮下載的 ZIP，不要只複製 EXE。"); return }
+	// Hardware is checked before Python, pip or any optional AI installation.
+	if !runHardwarePreflight(base) { return }
 	if running() {
 		openURL(studioURL)
 		return
