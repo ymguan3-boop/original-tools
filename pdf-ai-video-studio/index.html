@@ -49,6 +49,25 @@
       <label for="aspectSelect">影片比例</label><select id="aspectSelect"><option value="16:9">16:9 · 橫式</option><option value="9:16">9:16 · 直式</option><option value="1:1">1:1 · 正方</option></select>
       <small class="hint">影片會保留 PDF 頁面原始比例；不足空間以背景填補，不扭曲圖表。</small>
     </section>
+    <section id="enginePanel">
+      <div class="section-title"><b>05</b><h2>AI 影片與數位人（選裝）</h2></div>
+      <label for="aiEngine">選擇本機引擎</label>
+      <select id="aiEngine">
+        <option value="">不使用 AI 影片（預設）</option>
+        <option value="wan22">Wan2.2 · PDF 圖像轉影片</option>
+        <option value="musetalk">MuseTalk · 人物嘴型同步</option>
+        <option value="sadtalker">SadTalker · 照片數位人</option>
+      </select>
+      <button class="btn" id="engineCheck">檢查 GPU／模型／ComfyUI</button>
+      <p id="engineDetails" class="hint" role="status">需使用 Windows 桌面版，先安裝官方 ComfyUI 及對應的可信模型工作流。</p>
+      <label for="aiPrompt">目前頁面 AI 影片提示詞</label>
+      <textarea id="aiPrompt" rows="4" class="inline-textarea" maxlength="1200" placeholder="描述希望展示的動畫，正式 PDF 圖表與文字請保持原樣。">沉穩、專業、清晰的動態示意；不更動原始資料數值。</textarea>
+      <label for="referenceImage">人物參考圖（數位人必填；PNG）</label>
+      <input type="file" id="referenceImage" accept="image/png">
+      <button id="generateAIClip" class="btn primary" disabled>✦ 產生目前頁面 AI 影片</button>
+      <p id="engineResult" class="hint">模型不會隨 ZIP 預載。生成影片僅作示意，請取得人像／聲音使用授權。</p>
+      <small class="hint"><a target="_blank" rel="noopener noreferrer" href="https://github.com/ymguan3-boop/original-tools/tree/main/pdf-ai-video-studio/local-service/workflows">模型與 ComfyUI 工作流安裝說明</a></small>
+    </section>
   </aside>
   <main class="main">
     <div class="view-head"><div><h1>影片預覽與編輯</h1><p>逐頁核對文案，確認後輸出具有旁白、字幕與音樂的影片</p></div><div id="exportInfo" class="status">輸出 WebM（VP9／Opus）</div></div>
