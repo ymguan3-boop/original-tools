@@ -62,6 +62,12 @@
       <div class="dependency-guide" aria-label="本機環境檢查結果">
         <div class="dependency-item"><span><strong>Python 執行環境</strong><small id="pythonStatus">等待檢查…</small></span><a target="_blank" rel="noopener noreferrer" href="https://www.python.org/downloads/windows/">Python 官方下載</a></div>
         <div class="dependency-item"><span><strong>ComfyUI（進階功能選裝）</strong><small id="comfyStatus">等待檢查…</small></span><a target="_blank" rel="noopener noreferrer" href="https://www.comfy.org/download">ComfyUI 官方下載</a></div>
+        <div class="dependency-item"><span><strong>瀏覽器／WebM 錄製（必要）</strong><small id="browserStatus">等待檢查…</small></span><a target="_blank" rel="noopener noreferrer" href="https://www.microsoft.com/edge/download">Edge 官方下載</a></div>
+        <div class="dependency-item"><span><strong>FFmpeg（MuseTalk／MP4 選用）</strong><small id="ffmpegStatus">等待檢查…</small></span><a target="_blank" rel="noopener noreferrer" href="https://ffmpeg.org/download.html">FFmpeg 官方下載</a></div>
+        <div class="dependency-item"><span><strong>Ollama（本機 LLM 選用）</strong><small id="ollamaStatus">等待檢查…</small></span><a target="_blank" rel="noopener noreferrer" href="https://ollama.com/download/windows">Ollama 官方下載</a></div>
+        <div class="dependency-item"><span><strong>Git（部分第三方節點選用）</strong><small id="gitStatus">等待檢查…</small></span><a target="_blank" rel="noopener noreferrer" href="https://git-scm.com/downloads/win">Git 官方下載</a></div>
+        <div class="dependency-item"><span><strong>GPU 驅動／儲存空間</strong><small id="hardwareStatus">等待檢查…</small></span><a target="_blank" rel="noopener noreferrer" href="https://www.nvidia.com/zh-tw/drivers/">NVIDIA 驅動下載</a></div>
+        <p class="hint">這些檢查只能確認瀏覽器功能、本機 API 是否回應，以及命令是否存在於 PATH；**無法保證 ComfyUI 模型、CUDA／PyTorch 相容性或所有自訂節點都已完成安裝**。</p>
         <p class="hint">ComfyUI 的桌面版通常自行管理 Python 環境；本製片程式的 EXE 則獨立檢查 Python。如 ComfyUI 已安裝但尚未執行，請先開啟 ComfyUI 並確認本機 API 連線。</p>
       </div>
       <p id="engineDetails" class="hint" role="status">模型屬選裝項目。未偵測 ComfyUI 執行時，不代表一定沒有安裝。</p>
