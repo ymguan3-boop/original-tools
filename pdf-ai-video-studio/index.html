@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="PDF 智慧影音製作系統：AI 逐頁文案、中文語音、背景音樂、同步字幕與 WebM 影片">
+  <title>PDF 智慧影音製作系統｜原創工具集</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="app-head">
+  <div class="brand"><div class="brand-icon">▶</div><div><strong>PDF 智慧影音製作系統</strong><small>AI Video Studio · 原創工具集</small></div></div>
+  <div class="head-actions"><span id="serverStatus" class="status">正在檢查本機服務…</span><a href="../">返回原創工具集</a></div>
+</header>
+<div class="workspace">
+  <aside class="panel controls">
+    <section>
+      <div class="section-title"><b>01</b><h2>匯入資料</h2></div>
+      <label class="upload" for="pdfFile"><span>📄</span><strong>選擇 PDF 文件</strong><small>文件只在瀏覽器本機解析；最多 60 頁／30 MB</small></label>
+      <input id="pdfFile" type="file" accept="application/pdf,.pdf" hidden>
+      <p id="fileInfo" class="subtle">尚未選擇 PDF</p>
+      <label for="movieTitle">影片標題</label><input id="movieTitle" placeholder="輸入影片標題">
+    </section>
+    <section>
+      <div class="section-title"><b>02</b><h2>逐頁旁白</h2></div>
+      <label for="scriptMode">旁白來源</label>
+      <select id="scriptMode"><option value="ai">AI 自動撰寫（需本機服務與 LLM）</option><option value="manual">自訂逐頁文案</option><option value="underline">原文底線導讀</option></select>
+      <div id="aiOptions">
+        <label for="narrativeStyle">文案風格</label><select id="narrativeStyle"><option value="audit">專業審計報告（忠實引述）</option><option value="business">專業成果簡報</option><option value="teaching">清晰教學解說</option><option value="story">自然敘事</option></select>
+        <label for="targetSeconds">每頁目標秒數</label><select id="targetSeconds"><option value="20">20 秒（精簡）</option><option value="40" selected>40 秒（標準）</option><option value="60">60 秒（詳細）</option><option value="90">90 秒（深入）</option></select>
+        <button id="generateScripts" class="btn primary" disabled>✦ AI 生成逐頁旁白</button>
+        <small class="hint">僅 PDF 擷取文字傳給你設定的 LLM；圖表須人工校核。生成後可逐頁編輯。</small>
+      </div>
+    </section>
+    <section>
+      <div class="section-title"><b>03</b><h2>語音與背景音樂</h2></div>
+      <label for="voiceSelect">配音聲線</label>
+      <select id="voiceSelect"><option value="zh-TW-YunJheNeural">臺灣男聲 · YunJhe</option><option value="zh-TW-HsiaoChenNeural">臺灣女聲 · HsiaoChen</option><option value="zh-TW-HsiaoYuNeural">臺灣女聲 · HsiaoYu</option><option value="zh-CN-YunjianNeural">中文男聲 · Yunjian</option></select>
+      <button class="btn primary" id="generateAudio" disabled>🎙 產生所有頁面旁白音檔</button>
+      <small class="hint">Edge-TTS 免 API Key，但需要連網及啟動本機服務。配音文字會傳送至語音供應商。</small>
+      <label class="switch"><input type="checkbox" id="enableBgm"> 加入背景音樂 BGM</label>
+      <label for="bgmFile">背景音樂檔案（MP3／WAV 等）</label><input type="file" id="bgmFile" accept="audio/*" disabled>
+      <label for="bgmVolume">背景音樂音量 <span id="volumeLabel">18%</span></label><input type="range" id="bgmVolume" min="0" max="50" value="18" disabled>
+      <small class="hint">旁白時自動降低音樂，開頭結尾淡入淡出。請使用有合法授權的音樂。</small>
+    </section>
+    <section>
+      <div class="section-title"><b>04</b><h2>分鏡與影片設定</h2></div>
+      <label for="templateSelect">畫面模板</label><select id="templateSelect"><option value="professional">專業簡報</option><option value="cinematic">電影科技</option><option value="minimal">簡潔白底</option></select>
+      <label for="aspectSelect">影片比例</label><select id="aspectSelect"><option value="16:9">16:9 · 橫式</option><option value="9:16">9:16 · 直式</option><option value="1:1">1:1 · 正方</option></select>
+      <small class="hint">影片會保留 PDF 頁面原始比例；不足空間以背景填補，不扭曲圖表。</small>
+    </section>
+  </aside>
+  <main class="main">
+    <div class="view-head"><div><h1>影片預覽與編輯</h1><p>逐頁核對文案，確認後輸出具有旁白、字幕與音樂的影片</p></div><div id="exportInfo" class="status">輸出 WebM（VP9／Opus）</div></div>
+    <div class="stage"><canvas id="videoCanvas" width="1280" height="720" aria-label="影片畫面預覽"></canvas></div>
+    <div class="toolbar"><button id="playPreview" class="btn" disabled>▶ 播放全部</button><button id="stopPreview" class="btn" disabled>■ 停止</button><button id="exportVideo" class="btn primary" disabled>⬇ 匯出影片 WebM</button><span id="clock" class="clock">00:00 / 00:00</span></div>
+    <div class="edit-layout">
+      <section class="editor-card">
+        <div class="card-head"><h2>分鏡時間軸</h2><span id="sceneCount" class="subtle">0 頁</span></div>
+        <div id="sceneList" class="scenes"><p class="empty">匯入 PDF 後，這裡會顯示逐頁分鏡。</p></div>
+      </section>
+      <section class="editor-card">
+        <div class="card-head"><h2 id="editorTitle">逐頁旁白編輯</h2><span id="audioState" class="subtle">尚無音檔</span></div>
+        <textarea id="scriptEditor" rows="9" placeholder="在此編輯目前頁面的旁白，變更文字後需重新產生音檔。" disabled></textarea>
+        <p class="hint" id="pageMeta">AI 文案請務必核對正式文件數據與語意；未經確認的 AI 解讀不得視為原始證據。</p>
+        <div class="editor-actions"><button class="btn" id="restoreText" disabled>使用原文</button><button class="btn" id="downloadScript" disabled>下載逐頁文字稿</button></div>
+      </section>
+    </div>
+    <p class="privacy">🔒 PDF 與背景音樂不會上傳到本機服務。AI 文案會把擷取的頁面文字傳送至使用者設定的 LLM；TTS 會把旁白文字傳至 Microsoft Edge 線上語音服務。若處理機敏資料，請改用離線模型／經授權服務，勿傳送保密文字。</p>
+    <div id="log" role="status" aria-live="polite" class="log">請先匯入 PDF。若需 AI 與免錄屏語音輸出，請依 README 啟動本機服務。</div>
+  </main>
+</div>
+<script src="../pdf-voice-video/lib/pdf.min.js"></script>
+<script defer src="./app.js"></script>
+</body>
+</html>
