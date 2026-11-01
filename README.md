@@ -14,11 +14,12 @@
 |------|------|----------|--------|
 | **QR 連結產生器** | 輸入網址即時產生高畫質 QR Code，支援顏色/尺寸/邊距/容錯等級，PNG/SVG 下載 | [開啟](https://ymguan3-boop.github.io/original-tools/qr-platform/) | [qr-platform](https://github.com/ymguan3-boop/qr-platform) |
 | **PDF 轉語音影片模組** | 匯入 PDF 自動偵測底線段落，中文語音逐段朗讀 + 黃色高亮字幕，錄製為 WebM 影片 | [開啟](https://ymguan3-boop.github.io/original-tools/pdf-voice-video/) | [pdf-voice-video](https://github.com/ymguan3-boop/pdf-voice-video) |
+| **PDF 智慧影音製作系統** | 全新獨立工具：AI 逐頁旁白、Edge-TTS 音檔、背景音樂、分鏡模板與 WebM 有聲影片；AI/配音需本機安全服務 | [開啟](https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/) | 本倉庫 pdf-ai-video-studio/ |
 | **手機遠端協助工作台** | 4 位數配對、手機鏡頭、雙向語音、文字訊息及即時畫面標記 | [開啟](https://ymguan3-boop.github.io/original-tools/mobile-remote-assist/) | 本倉庫 `mobile-remote-assist/` |
 | **工程照片 AI 交叉稽核系統** | 多資料夾交叉比對工程照片，一次分析即完成 DINOv2 本機特徵評分，判定重複請款風險，產生差異說明並匯出 Word 查核報告 | [開啟](https://ymguan3-boop.github.io/original-tools/image-audit/) | 本倉庫 `image-audit/` |
 | **工程照片稽核 — 本機桌面版** | 同上，但打包為可離線執行的桌面版：雙擊 `start.bat` 即啟動本機伺服器並開啟瀏覽器，模型內建不需下載，完全離線 | 解壓縮 `desktop/` 後雙擊 `start.bat` | 本倉庫 `desktop/` |
 
-> QR 與 PDF 工具皆為純前端。遠端協助工具的靜態前端部署於 GitHub Pages，配對與短效 LiveKit 憑證由既有 Sites 後端安全提供；秘密金鑰不在本倉庫。
+> QR 與舊版 PDF 工具為純前端；新版 PDF 智慧影音製作系統的網頁為純前端，但 AI／語音功能需要啟動本機服務，不會將金鑰放在 GitHub Pages。遠端協助工具的靜態前端部署於 GitHub Pages，配對與短效 LiveKit 憑證由既有 Sites 後端安全提供；秘密金鑰不在本倉庫。
 > 工程照片 AI 交叉稽核為純前端，相似度判定用的 DINOv2 模型在使用者瀏覽器本機執行（背景執行緒，操作不卡頓），**免 API Key、照片不外傳**；差異說明的文字可選填 OpenRouter 金鑰（存於 localStorage），未填時改用規則模板。
 
 ## 下載本機桌面版
@@ -40,6 +41,9 @@ original-tools/
 │   ├── index.html
 │   ├── lib/pdf.min.js
 │   └── ...
+├── pdf-ai-video-studio/      # 新版獨立 PDF AI 影音工作室（靜態前端＋本機服務）
+│   ├── index.html, app.js, style.css
+│   └── local-service/      # Python 本機 LLM／Edge-TTS；不公開部署
 ├── mobile-remote-assist/    # 手機遠端協助 GitHub Pages 前端
 │   ├── index.html
 │   ├── helper.html
@@ -90,7 +94,7 @@ npx serve .
 
 已設定 `.github/workflows/deploy.yml`，推送至 `main` 即自動：
 1. 安裝並建置 `qr-platform/client`（`base: /original-tools/qr-platform/`）與 `image-audit`（`base: /original-tools/image-audit/`）
-2. 組裝 `deploy/` 目錄：集合首頁、QR 建置輸出、PDF 工具、遠端協助前端及工程照片稽核建置輸出
+2. 組裝 `deploy/` 目錄：集合首頁、QR 建置輸出、PDF 工具、新版 PDF 智慧影音前端、遠端協助前端及工程照片稽核建置輸出
 3. 透過 `actions/deploy-pages` 發布至 `https://ymguan3-boop.github.io/original-tools/`
 
 首次使用需至 GitHub： **Settings → Pages → Build and deployment → Source: GitHub Actions**（已由 CLI 自動設定）。
