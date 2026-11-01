@@ -14,7 +14,7 @@
 |------|------|----------|--------|
 | **QR 連結產生器** | 輸入網址即時產生高畫質 QR Code，支援顏色/尺寸/邊距/容錯等級，PNG/SVG 下載 | [開啟](https://ymguan3-boop.github.io/original-tools/qr-platform/) | [qr-platform](https://github.com/ymguan3-boop/qr-platform) |
 | **PDF 轉語音影片模組** | 匯入 PDF 自動偵測底線段落，中文語音逐段朗讀 + 黃色高亮字幕，錄製為 WebM 影片 | [開啟](https://ymguan3-boop.github.io/original-tools/pdf-voice-video/) | [pdf-voice-video](https://github.com/ymguan3-boop/pdf-voice-video) |
-| **PDF 智慧影音製作系統** | 全新獨立工具：AI 逐頁旁白、Edge-TTS 音檔、背景音樂、分鏡模板與 WebM 有聲影片；AI/配音需本機安全服務 | [開啟](https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/) | 本倉庫 pdf-ai-video-studio/ |
+| **PDF 智慧影音製作系統** | 全新獨立工具：AI 旁白、Edge-TTS、BGM、分鏡，選裝 Wan2.2/MuseTalk/SadTalker；桌面 EXE 偵測 Python | [線上版](https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/) · [Windows 桌面版 ZIP](https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/pdf-ai-video-studio-desktop.zip) | 本倉庫 `pdf-ai-video-studio/` |
 | **手機遠端協助工作台** | 4 位數配對、手機鏡頭、雙向語音、文字訊息及即時畫面標記 | [開啟](https://ymguan3-boop.github.io/original-tools/mobile-remote-assist/) | 本倉庫 `mobile-remote-assist/` |
 | **工程照片 AI 交叉稽核系統** | 多資料夾交叉比對工程照片，一次分析即完成 DINOv2 本機特徵評分，判定重複請款風險，產生差異說明並匯出 Word 查核報告 | [開啟](https://ymguan3-boop.github.io/original-tools/image-audit/) | 本倉庫 `image-audit/` |
 | **工程照片稽核 — 本機桌面版** | 同上，但打包為可離線執行的桌面版：雙擊 `start.bat` 即啟動本機伺服器並開啟瀏覽器，模型內建不需下載，完全離線 | 解壓縮 `desktop/` 後雙擊 `start.bat` | 本倉庫 `desktop/` |
@@ -24,7 +24,9 @@
 
 ## 下載本機桌面版
 
-不想連網或想完全離線使用，可下載本機桌面版（Windows）：
+**PDF 智慧影音製作系統（全新 Windows x64 ZIP）：** [點擊下載](https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/pdf-ai-video-studio-desktop.zip)。完整解壓縮後雙擊 `啟動PDF智慧影音.exe`。自動檢查 Python 3.10–3.14；未安裝時導向 [Python 官方 Windows 下載](https://www.python.org/downloads/windows/)。AI 影片與數位人模型需額外安裝，請參閱 [新版操作說明](pdf-ai-video-studio/README.md)。
+
+**工程照片 AI 稽核桌面版（原有）：**
 
 - **Release 頁面**：<https://github.com/ymguan3-boop/original-tools/releases/tag/v1.1.0>
 - 下載 `desktop-release.zip`（約 25MB），解壓縮後雙擊 `start.bat` 即可。
@@ -41,9 +43,10 @@ original-tools/
 │   ├── index.html
 │   ├── lib/pdf.min.js
 │   └── ...
-├── pdf-ai-video-studio/      # 新版獨立 PDF AI 影音工作室（靜態前端＋本機服務）
+├── pdf-ai-video-studio/      # 新版獨立 PDF AI 影音工作室（靜態前端＋Windows 桌面版）
 │   ├── index.html, app.js, style.css
-│   └── local-service/      # Python 本機 LLM／Edge-TTS；不公開部署
+│   ├── desktop/            # Windows GUI 啟動器，檢查 Python 和啟動 HTML
+│   └── local-service/      # Python 本機 LLM／Edge-TTS／ComfyUI 接頭；不公開部署
 ├── mobile-remote-assist/    # 手機遠端協助 GitHub Pages 前端
 │   ├── index.html
 │   ├── helper.html
