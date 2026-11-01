@@ -34,10 +34,24 @@
     </section>
     <section>
       <div class="section-title"><b>03</b><h2>語音與背景音樂</h2></div>
-      <label for="voiceSelect">配音聲線</label>
-      <select id="voiceSelect"><option value="zh-TW-YunJheNeural">臺灣男聲 · YunJhe</option><option value="zh-TW-HsiaoChenNeural">臺灣女聲 · HsiaoChen</option><option value="zh-TW-HsiaoYuNeural">臺灣女聲 · HsiaoYu</option><option value="zh-CN-YunjianNeural">中文男聲 · Yunjian</option></select>
+      <label for="voiceMode">語音生成方式</label>
+      <select id="voiceMode"><option value="edge">Edge-TTS · 免費預設聲線</option><option value="indextts">Index-TTS2 · 複製自己的聲音（本機模型）</option></select>
+      <div id="edgeVoiceOptions">
+        <label for="voiceSelect">配音聲線</label>
+        <select id="voiceSelect"><option value="zh-TW-YunJheNeural">臺灣男聲 · YunJhe</option><option value="zh-TW-HsiaoChenNeural">臺灣女聲 · HsiaoChen</option><option value="zh-TW-HsiaoYuNeural">臺灣女聲 · HsiaoYu</option><option value="zh-CN-YunjianNeural">中文男聲 · Yunjian</option></select>
+        <small class="hint">Edge-TTS 免 API Key，需連網，旁白文字會送至 Microsoft 語音服務。</small>
+      </div>
+      <div id="cloneVoiceOptions" class="voice-clone-options" hidden>
+        <p class="hint">使用自己的聲音或明確授權的錄音；Index-TTS2 需要本機 ComfyUI、相容自訂節點與模型權重。</p>
+        <label for="cloneReference">參考錄音（WAV／MP3／FLAC，最多 8 MB）</label>
+        <input id="cloneReference" type="file" accept=".wav,.mp3,.flac,audio/wav,audio/mpeg,audio/flac">
+        <label class="switch"><input type="checkbox" id="cloneConsent"> 我確認擁有此聲音，或已取得當事人明確授權，並同意上傳至本機 ComfyUI</label>
+        <button id="cloneUpload" type="button" class="btn" disabled>上傳並確認聲線</button>
+        <button id="clonePreview" type="button" class="btn" disabled>試聽自訂聲線</button>
+        <p class="hint" id="cloneStatus" role="status" aria-live="polite">請先啟動 ComfyUI，安裝 Index-TTS2 模型並選擇參考錄音。</p>
+        <a class="hint" href="https://github.com/ymguan3-boop/original-tools/blob/main/pdf-ai-video-studio/local-service/workflows/INDEXTTS2.md" target="_blank" rel="noopener noreferrer">Index-TTS2 安裝、模型與授權說明</a>
+      </div>
       <button class="btn primary" id="generateAudio" disabled>🎙 產生所有頁面旁白音檔</button>
-      <small class="hint">Edge-TTS 免 API Key，但需要連網及啟動本機服務。配音文字會傳送至語音供應商。</small>
       <label class="switch"><input type="checkbox" id="enableBgm"> 加入背景音樂 BGM</label>
       <label for="bgmFile">背景音樂檔案（MP3／WAV 等）</label><input type="file" id="bgmFile" accept="audio/*" disabled>
       <label for="bgmVolume">背景音樂音量 <span id="volumeLabel">18%</span></label><input type="range" id="bgmVolume" min="0" max="50" value="18" disabled>
@@ -96,7 +110,7 @@
         <div class="editor-actions"><button class="btn" id="restoreText" disabled>使用原文</button><button class="btn" id="downloadScript" disabled>下載逐頁文字稿</button></div>
       </section>
     </div>
-    <p class="privacy">🔒 PDF 原檔與 BGM 保留在瀏覽器。AI 文案會把擷取的頁面文字送至你設定的 LLM；Edge-TTS 會將旁白文字傳給 Microsoft 線上服務。選用 AI 影片或數位人時，目前頁面的 PNG 截圖、授權人物照片及旁白音檔會傳至你本機的 ComfyUI。處理機敏資料前請確認來源與模型服務、授權及資安政策。</p>
+    <p class="privacy">🔒 PDF 原檔與 BGM 保留在瀏覽器。AI 文案會把擷取的頁面文字送至你設定的 LLM；Edge-TTS 會將旁白文字傳給 Microsoft 線上服務；Index-TTS2 則會把授權參考錄音及待合成文字上傳到本機 ComfyUI，素材和輸出會留在 ComfyUI 的目錄。選用 AI 影片或數位人時，目前頁面的 PNG 截圖、授權人物照片及旁白音檔會傳至你本機的 ComfyUI。處理機敏資料前請確認來源與模型服務、授權及資安政策。</p>
     <div id="log" role="status" aria-live="polite" class="log">請先匯入 PDF。若需 AI 與免錄屏語音輸出，請依 README 啟動本機服務。</div>
   </main>
 </div>
@@ -129,7 +143,7 @@
       </section>
       <section class="setup-step">
         <h3><span>3</span> 中文 AI 配音（建議先測試）</h3>
-        <p>Edge-TTS 免 API Key，但需連線 Microsoft 語音服務。按測試會送出一段範例文字。</p>
+        <p>可選 Edge-TTS 預設聲線或 Index-TTS2 自訂聲線。選用聲音複製時，先到主畫面「語音與背景音樂」上傳本人授權錄音、確認模型並試聽。</p>
         <div class="setup-actions"><button type="button" id="setupTestVoice" class="btn">測試臺灣中文配音</button><span id="setupVoiceStatus" class="hint">尚未測試</span></div>
       </section>
       <section class="setup-step">
