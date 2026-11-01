@@ -35,7 +35,7 @@ func main() {
      log.Println("本機服務停止：", err)
    }
  }()
- fmt.Println("工程照片 AI 交叉稽核系統 v2.5.0 - DINOv2 / FAST-BRIEF / RANSAC / SSIM 桌面版")
+ fmt.Println("工程照片 AI 交叉稽核系統 v2.5.1 - DINOv2 / FAST-BRIEF / RANSAC / SSIM 桌面版")
  fmt.Println("全部跨批次配對之 DINOv2 + FAST/BRIEF、RANSAC、SSIM 於本機自動執行，無需安裝 Python / Node.js。")
  fmt.Println("系統網址：" + url)
  fmt.Println("請勿關閉此視窗，關閉後本機伺服器即停止。")
