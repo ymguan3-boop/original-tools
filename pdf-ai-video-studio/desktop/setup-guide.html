@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF 智慧影音｜首次啟動安裝引導</title>
+<style>body{font:16px/1.7 "Microsoft JhengHei",system-ui,sans-serif;margin:0;background:#0d1b30;color:#eaf4ff}main{max-width:780px;margin:auto;padding:28px 18px 60px}h1{font-size:27px}h2{font-size:20px;margin:26px 0 8px}.card{background:#172b47;border:1px solid #365477;border-radius:15px;padding:18px;margin:16px 0}.links{display:flex;flex-wrap:wrap;gap:9px}.links a{display:inline-block;color:#fff;background:#247ac0;border-radius:10px;text-decoration:none;padding:9px 13px;font-size:14px}a{color:#97d7ff}p,li{color:#c5d8ea}strong{color:#fff}.muted{font-size:14px;color:#aac0d8}code{font-family:Consolas,monospace;color:#ffdb92}</style>
+</head><body><main>
+<h1>PDF 智慧影音製作系統｜首次啟動引導</h1>
+<p>這是隨 Windows ZIP 一起提供的<strong>離線說明頁</strong>。你只要按步驟安裝必要程式，然後再次雙擊 <strong>啟動PDF智慧影音.exe</strong>，它就會自動開啟本機 HTML 製片介面。</p>
+<div class="card"><h2>第一步：Python（基本功能必需）</h2>
+<p>EXE 沒有找到 Python 3.10–3.14，或安裝後尚未能由系統找到。建議 Python 3.12/3.13 Windows x64。安裝後請關閉程式，重新雙擊 EXE；不必手動建立虛擬環境。</p>
+<div class="links"><a href="https://www.python.org/downloads/windows/">Python 官方 Windows 下載</a><a href="https://docs.python.org/3/using/windows.html">Python Windows 安裝說明</a></div>
+<p class="muted">如果安裝後仍偵測不到 Python，請確認 Windows 的 Python Launcher／PATH 設定，以及是否意外啟動 Microsoft Store 的 Python 執行別名。</p></div>
+<div class="card"><h2>第二步：基本配音與錄影</h2>
+<p>Python 偵測通過後，EXE 會詢問是否安裝必要的 Edge-TTS/httpx 套件。安裝完成即自動開啟本機網址 <code>http://127.0.0.1:8765/pdf-ai-video-studio/</code>；程式會顯示互動式設定精靈。錄製 WebM 需要支援 MediaRecorder 的瀏覽器。</p>
+<div class="links"><a href="https://www.microsoft.com/edge/download">Microsoft Edge 官方下載</a></div></div>
+<div class="card"><h2>第三步：選用 AI 文案與 AI 影片</h2>
+<p>AI 文案可直接在 HTML 精靈內設定你的 OpenAI 相容 LLM，或選擇本機 Ollama。若要使用 Wan2.2、MuseTalk、SadTalker，再額外安裝 ComfyUI、可信的模型權重與相容工作流；沒有 GPU 仍可使用基本 PDF 製片。</p>
+<div class="links"><a href="https://ollama.com/download/windows">Ollama 官方下載</a><a href="https://www.comfy.org/download">ComfyUI 官方下載</a><a href="https://ffmpeg.org/download.html">FFmpeg 官方下載</a></div></div>
+<p class="muted">Python 套件與雲端 API 需要網路。未選用的模型不必下載。請不要從不明網站安裝來路不明的 EXE、模型節點或 Python 套件。</p>
+</main></body></html>
