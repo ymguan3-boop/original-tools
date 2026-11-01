@@ -2,8 +2,10 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import sys
 
 source=Path(__file__).resolve().parents[1]/"local-service"/"server.py"
+sys.path.insert(0,str(source.parent))
 spec=importlib.util.spec_from_file_location("pdf_ai_studio_service",source)
 module=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
