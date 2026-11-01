@@ -43,7 +43,7 @@ def status():
         with client() as c:
             r=c.get(BASE+"/system_stats")
             alive=(r.status_code==200)
-    except (OSError, ValueError, httpx.HTTPError):
+    except Exception:
         pass
     return {
         "comfyui_ready": alive,
