@@ -381,7 +381,14 @@
     if(mg){
       const target=Number(ui.volume.value)/100,now=state.ctx.currentTime;
       mg.gain.cancelScheduledValues(now);
-      mg.gain.setTargetAtTime(page.audioURL?target*.18:target*.5,now,.3);
+      const level=page.audioURL?target*.18:target*.5;
+      mg.gain.setTargetAtTime(level,now,.3);
+      // Fade background music out before the final scene ends.
+      if(i===state.pages.length-1){
+        const fadeAt=now+Math.max(.6,page.duration-1.7);
+        mg.gain.setValueAtTime(level,fadeAt);
+        mg.gain.linearRampToValueAtTime(0,fadeAt+1.5);
+      }
     }
     if(page.audioURL){
       state.voice.onended=()=>{if(state.playing&&sessionId===state.session){state.clockOffset+=page.duration;playScene(i+1,sessionId,mg).catch(err=>{say(err.message,true);stopPlayback();});}};
