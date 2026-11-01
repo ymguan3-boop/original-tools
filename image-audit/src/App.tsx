@@ -25,7 +25,7 @@ const DINO_MODEL_ID = 'Xenova/dinov2-small';
 const MAX_RESULTS = 2000;
 const DESKTOP_FULL_SCAN = true;
 const PARAMETER_GUIDE_ROWS: readonly (readonly [string,string,string,string,string])[] = [["共同視覺初篩分數","兩版","以影像特徵排序疑似配對","0～100 分；pHash 38%＋明暗結構 33%＋邊緣 18%＋dHash 11% 為基礎權重，另有可信度封頂與補正","快速初篩；分數不是同源或違規機率"],["pHash／dHash","兩版","頻率構圖／相鄰亮暗變化","pHash 相同位元／63×100%；dHash 相同位元／64×100%；權重分別 38%、11%","重存、縮放後初篩；大裁切容易改變雜湊"],["明暗結構","兩版","32×32 像素的亮暗空間相關性","相關性經轉換為 0～100 指標；基礎權重 33%","曝光變化與局部裁切影響結果"],["邊緣一致性","兩版","比對灰階邊緣方向與分布","梯度相關性轉換為 0～100 指標；基礎權重 18%","輪廓相似但非同源證據"],["像素／色彩","兩版","RGB 差距、色彩直方圖交集","0～100 輔助值，不另納入前述主權重","照片色調相同不能證明同源"],["去白邊／多區域","兩版","保守排除近白外框並比對全圖、中心及去白邊區","區域選擇不是百分比，可能影響最佳共同分數","掃描邊界與裁切；不會重新創造原始畫面"],["位置校正","兩版","32×32 特徵圖於 ±4 格測試位移","灰階相關性映射成 0～100，非特徵點內點率","小幅偏移；不處理大幅透視變形"],["DINOv2-small CLS","桌面版","384 維全圖語意向量餘弦比對","餘弦值×100，非同源機率、不加入共同分數","相似場景會高分，需幾何交叉驗證"],["DINOv2 Patch","桌面版（可用時）","可用的 4×4 局部 token 特徵彙總","局部餘弦×100；未回傳時顯示未取得","局部證據，不能直接作違規判定"],["SHA-256","桌面版","檢查照片檔案二進位是否完全相同","相同／不同，不存在相似度百分比","裁切、重新輸出後通常不相同"],["FAST／方向 BRIEF","桌面版","局部角點與二進位描述子匹配","匹配點數，不是百分比；不是 OpenCV ORB","一般裁切、縮放與旋轉；低紋理可能漏判"],["多尺度 SIFT-style","桌面版（後備）","FAST 證據不足時補充自製 128 維梯度描述子","匹配點數，不是百分比，也不是完整 OpenCV SIFT","局部裁切補強，仍可能有漏判"],["RANSAC","桌面版","以相似變換尋找幾何一致的局部匹配","內點比例＝內點／匹配點×100%；覆蓋率＝內點外接框面積／384×288×100%","同源幾何線索；不是 Homography 或違規機率"],["對齊後 SSIM","桌面版","在有效幾何重疊區域比較 8×8 區塊結構","SSIM 指標映射至 0～100；不是照片同源機率","光照、雜訊、遮蔽及非重疊區域會影響"],["有效重疊／差異區","桌面版","揭露幾何驗證涵蓋範圍及亮度差異","重疊＝有效對齊像素／較小有效影像像素×100%；差異＝亮差>32之有效像素／有效像素×100%","高重疊不保證全圖相同；差異熱區供人工判讀"],["MobileSAM／YOLO","兩版未啟用","物件分割或物件偵測","未執行，不輸出任何辨識百分比","有具體物件計數需求再評估"]];
-const DESKTOP_VERSION = '2.5.0';
+const DESKTOP_VERSION = '2.5.1';
 /** 清單每頁顯示組數 */
 const PAGE_SIZE = 30;
 
@@ -973,7 +973,7 @@ const App = () => {
       }
       const blob = await writer.create({
         title:'工程照片完整查核報告',
-        engine:'桌面版 v2.5.0；完整分析 '+(scanSummary?.total??0)+' 組跨批次照片，幾何驗證 '+(scanSummary?.checked??0)+' 組，失敗 '+(scanSummary?.errors??0)+' 項，幾何補列 '+(scanSummary?.rescued??0)+' 組；共同視覺門檻 '+listThreshold+'%；DINOv2-small、Patch（可用時）、SHA-256、FAST／BRIEF、SIFT-style 梯度補強、RANSAC、對齊 SSIM（含重疊率與證據圖）',
+        engine:'桌面版 v2.5.1；完整分析 '+(scanSummary?.total??0)+' 組跨批次照片，幾何驗證 '+(scanSummary?.checked??0)+' 組，失敗 '+(scanSummary?.errors??0)+' 項，幾何補列 '+(scanSummary?.rescued??0)+' 組；共同視覺門檻 '+listThreshold+'%；DINOv2-small、Patch（可用時）、SHA-256、FAST／BRIEF、SIFT-style 梯度補強、RANSAC、對齊 SSIM（含重疊率與證據圖）',
         rows:reportRows
       });
       const url=URL.createObjectURL(blob),link=document.createElement('a');
