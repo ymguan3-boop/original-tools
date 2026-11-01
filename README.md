@@ -14,17 +14,17 @@
 |------|------|----------|--------|
 | **QR 連結產生器** | 輸入網址即時產生高畫質 QR Code，支援顏色/尺寸/邊距/容錯等級，PNG/SVG 下載 | [開啟](https://ymguan3-boop.github.io/original-tools/qr-platform/) | [qr-platform](https://github.com/ymguan3-boop/qr-platform) |
 | **PDF 轉語音影片模組** | 匯入 PDF 自動偵測底線段落，中文語音逐段朗讀 + 黃色高亮字幕，錄製為 WebM 影片 | [開啟](https://ymguan3-boop.github.io/original-tools/pdf-voice-video/) | [pdf-voice-video](https://github.com/ymguan3-boop/pdf-voice-video) |
-| **PDF 智慧影音製作系統** | 全新獨立工具：AI 旁白、Edge-TTS、BGM、分鏡，選裝 Wan2.2/MuseTalk/SadTalker；桌面 EXE 偵測 Python | [線上版](https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/) · [Windows 桌面版 ZIP](https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/pdf-ai-video-studio-desktop.zip) | 本倉庫 `pdf-ai-video-studio/` |
+| **PDF 智慧影音製作系統（僅桌面版）** | Windows EXE 啟動 HTML；自動檢查 Python，提供官方下載；可選裝 ComfyUI／Wan2.2／MuseTalk／SadTalker，不提供新版工具線上版 | [下載 Windows 桌面版 ZIP](https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/pdf-ai-video-studio-desktop.zip) | 本倉庫 `pdf-ai-video-studio/` |
 | **手機遠端協助工作台** | 4 位數配對、手機鏡頭、雙向語音、文字訊息及即時畫面標記 | [開啟](https://ymguan3-boop.github.io/original-tools/mobile-remote-assist/) | 本倉庫 `mobile-remote-assist/` |
 | **工程照片 AI 交叉稽核系統** | 多資料夾交叉比對工程照片，一次分析即完成 DINOv2 本機特徵評分，判定重複請款風險，產生差異說明並匯出 Word 查核報告 | [開啟](https://ymguan3-boop.github.io/original-tools/image-audit/) | 本倉庫 `image-audit/` |
 | **工程照片稽核 — 本機桌面版** | 同上，但打包為可離線執行的桌面版：雙擊 `start.bat` 即啟動本機伺服器並開啟瀏覽器，模型內建不需下載，完全離線 | 解壓縮 `desktop/` 後雙擊 `start.bat` | 本倉庫 `desktop/` |
 
-> QR 與舊版 PDF 工具為純前端；新版 PDF 智慧影音製作系統的網頁為純前端，但 AI／語音功能需要啟動本機服務，不會將金鑰放在 GitHub Pages。遠端協助工具的靜態前端部署於 GitHub Pages，配對與短效 LiveKit 憑證由既有 Sites 後端安全提供；秘密金鑰不在本倉庫。
+> QR 與舊版 PDF 工具為純前端；新版 PDF 智慧影音製作系統改為**僅提供 Windows 桌面版 ZIP**，其 HTML 只在使用者電腦的本機服務開啟，不部署新版線上介面。遠端協助工具的靜態前端部署於 GitHub Pages，配對與短效 LiveKit 憑證由既有 Sites 後端安全提供；秘密金鑰不在本倉庫。
 > 工程照片 AI 交叉稽核為純前端，相似度判定用的 DINOv2 模型在使用者瀏覽器本機執行（背景執行緒，操作不卡頓），**免 API Key、照片不外傳**；差異說明的文字可選填 OpenRouter 金鑰（存於 localStorage），未填時改用規則模板。
 
 ## 下載本機桌面版
 
-**PDF 智慧影音製作系統（全新 Windows x64 ZIP）：** [點擊下載](https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/pdf-ai-video-studio-desktop.zip)。完整解壓縮後雙擊 `啟動PDF智慧影音.exe`。自動檢查 Python 3.10–3.14；未安裝時導向 [Python 官方 Windows 下載](https://www.python.org/downloads/windows/)。AI 影片與數位人模型需額外安裝，請參閱 [新版操作說明](pdf-ai-video-studio/README.md)。
+**PDF 智慧影音製作系統（Windows x64 ZIP，無線上版）：** [點擊下載](https://ymguan3-boop.github.io/original-tools/pdf-ai-video-studio/pdf-ai-video-studio-desktop.zip)。完整解壓縮後雙擊 `啟動PDF智慧影音.exe`。自動檢查 Python 3.10–3.14；若缺少則提示並導向 [Python 官方 Windows 下載](https://www.python.org/downloads/windows/)。進階 ComfyUI 未偵測到運作時會提示並提供 [ComfyUI 官方下載](https://www.comfy.org/download)。模型需額外選裝，請參閱 [新版操作說明](pdf-ai-video-studio/README.md)。
 
 **工程照片 AI 稽核桌面版（原有）：**
 
@@ -97,7 +97,7 @@ npx serve .
 
 已設定 `.github/workflows/deploy.yml`，推送至 `main` 即自動：
 1. 安裝並建置 `qr-platform/client`（`base: /original-tools/qr-platform/`）與 `image-audit`（`base: /original-tools/image-audit/`）
-2. 組裝 `deploy/` 目錄：集合首頁、QR 建置輸出、PDF 工具、新版 PDF 智慧影音前端、遠端協助前端及工程照片稽核建置輸出
+2. 組裝 `deploy/` 目錄：集合首頁、QR 建置輸出、舊版 PDF 工具、**新版 PDF 智慧影音桌面 ZIP（不含線上 HTML）**、遠端協助前端及工程照片稽核建置輸出
 3. 透過 `actions/deploy-pages` 發布至 `https://ymguan3-boop.github.io/original-tools/`
 
 首次使用需至 GitHub： **Settings → Pages → Build and deployment → Source: GitHub Actions**（已由 CLI 自動設定）。
