@@ -26,7 +26,7 @@
 | ComfyUI | 只有 AI 影片／數位人選裝模型才需要 | HTML 工作台測試 127.0.0.1:8188 的本機 ComfyUI API | 顯示未連線，提供 [ComfyUI 官方下載](https://www.comfy.org/download) |
 | Wan2.2／MuseTalk／SadTalker 權重與 API 工作流 | 使用該模型時才需要 | HTML 顯示對應工作流是否就緒；須實際測試模型 | 依下方官方連結自行安裝與確認權重授權 |
 
-**ComfyUI 未連線 ≠ 一定未安裝。** 若已安裝 ComfyUI 但沒有啟動，請先啟動；若 Desktop 版未使用 8188 埠，需依本系統支援的本機 ComfyUI API 埠設定。**ComfyUI Desktop 及官方 Portable 可能自行附帶或管理 Python**，不代表它一定需要額外安裝系統 Python；本程式自己的 EXE 啟動器仍會獨立檢查 Python。
+**ComfyUI 未連線 ≠ 一定未安裝。** 若已安裝 ComfyUI 但沒有啟動，請先啟動；本版本固定使用 8188 埠；若 ComfyUI Desktop 使用其他埠，請將 ComfyUI 本機 API 改為 8188，或由維護者調整本程式的 engine_service.py 連線設定。**ComfyUI Desktop 及官方 Portable 可能自行附帶或管理 Python**，不代表它一定需要額外安裝系統 Python；本程式自己的 EXE 啟動器仍會獨立檢查 Python。
 
 模型官方來源：
 - ComfyUI：https://www.comfy.org/download
