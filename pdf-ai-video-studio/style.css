@@ -4,3 +4,13 @@
 #enginePanel .inline-textarea{width:100%;border:1px solid #344862;background:#0b1729;color:#f0f6ff;border-radius:10px;padding:10px 12px;min-height:96px;resize:vertical;line-height:1.6}
 #enginePanel #engineResult{padding:10px 12px;background:#112c41;border-radius:9px;border-left:3px solid #4ea7e8}
 #enginePanel a{color:#a8d8ff;word-break:break-word}
+
+/* Desktop dependency inspector: safe public vendor links */
+.dependency-guide{background:#0d1c30;border:1px solid #385371;border-radius:12px;padding:10px;margin-top:12px}
+.dependency-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid #263e5a}
+.dependency-item:last-of-type{border-bottom:0}
+.dependency-item strong{display:block;font-size:12px;color:#e4f2ff}
+.dependency-item small{display:block;color:#9fb7d0;font-size:11px;line-height:1.55;margin-top:4px}
+.dependency-item a{font-size:11px;display:block;white-space:nowrap;text-decoration:underline;color:#89cafd}
+.dependency-guide .hint{margin:8px 2px 2px}
+@media(max-width:620px){.dependency-item{align-items:flex-start;flex-direction:column;gap:6px}}
