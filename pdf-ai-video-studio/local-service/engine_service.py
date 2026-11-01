@@ -86,9 +86,10 @@ def hardware_preflight():
             return result
         data=json.loads(report_file.read_text(encoding="utf-8"))
         if not isinstance(data,dict) or data.get("version")!=1:return result
-        for key in result:
-            if key in data and isinstance(data[key],type(result[key])) and key not in ("logical_cores","notes"):
-                result[key]=data[key]
+        for key in ("cpu_name","advanced_tier"):
+            if isinstance(data.get(key),str):result[key]=data[key][:180]
+        if isinstance(data.get("checked_at"),str):
+            result["checked_at"]=data["checked_at"][:50]
         if isinstance(data.get("logical_cores"),int) and 1<=data["logical_cores"]<=1024:
             result["logical_cores"]=data["logical_cores"]
         if isinstance(data.get("gpu_names"),list):
