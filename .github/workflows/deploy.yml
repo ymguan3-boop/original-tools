@@ -145,8 +145,8 @@ jobs:
 
           # pdf-voice-video static (relative paths work under subpath)
           cp -r pdf-voice-video/* deploy/pdf-voice-video/
-          # New PDF AI Studio: STATIC ONLY. Do not ship local-service/.env or Python backend.
-          cp pdf-ai-video-studio/index.html pdf-ai-video-studio/app.js pdf-ai-video-studio/style.css deploy/pdf-ai-video-studio/
+          # PDF AI Studio is DESKTOP-ONLY. No web HTML/JS for this app.
+          # Only its Windows desktop ZIP is published below.
           # Make a portable download. Exclude secrets, model weights, venv, test files.
           python3 - <<'PY'
           from pathlib import Path
@@ -177,6 +177,11 @@ jobs:
               assert 'pdf-ai-video-studio/local-service/server.py' in names
               assert 'pdf-voice-video/lib/pdf.min.js' in names
               assert not any(name.endswith('/.env') or '/.venv/' in name or '/models/' in name for name in names)
+              assert 'pdf-ai-video-studio/index.html' in names, 'HTML must be inside desktop ZIP'
+              assert 'pdf-ai-video-studio/local-service/engine_service.py' in names
+          # Do not accidentally reintroduce an online version of this desktop-only tool.
+          published=list(Path('deploy/pdf-ai-video-studio').iterdir())
+          assert published==[output], f'Only desktop ZIP can be published: {published}'
           print('PDF AI Studio Windows ZIP:',output,output.stat().st_size,'bytes')
           PY
           # mobile remote assist frontend; signaling and token issuance remain server-side
