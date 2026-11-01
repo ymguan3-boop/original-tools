@@ -31,7 +31,7 @@ def _pair(a, b):
 def _filename(s):
     # DOCX table cells contain "第二批次｜name.png", sometimes split across runs.
     s = re.sub(r"\s+", "", s)
-    return s.rsplit("｜", 1)[-1]
+    return PurePosixPath(s.rsplit("｜", 1)[-1]).name
 
 def load_dataset(path):
     with zipfile.ZipFile(path) as z:
