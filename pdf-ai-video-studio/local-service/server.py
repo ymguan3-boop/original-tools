@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 import mimetypes
 import engine_service
+import voice_clone
 
 ROOT=Path(__file__).resolve().parent
 ORIGINS={"http://127.0.0.1:8765","http://localhost:8765","http://127.0.0.1:8777","http://localhost:8777","http://127.0.0.1:8000","http://localhost:8000"}
@@ -234,9 +235,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200,{"ok":True,"llm_ready":ready(config()),"tts_ready":True,"desktop":True});return
         if endpoint=="/api/setup/llm-config":
             self.send_json(200,config_status());return
+        if endpoint=="/api/voice-clone/status":
+            self.send_json(200,voice_clone.status());return
         try:
             if endpoint=="/api/engine/status":
                 self.send_json(200,engine_service.status());return
+            if endpoint in ("/api/voice-clone/job","/api/voice-clone/audio"):
+                job_id=parse_qs(parsed.query).get("id",[""])[0]
+                if endpoint=="/api/voice-clone/job":
+                    self.send_json(200,voice_clone.job_status(job_id));return
+                audio,mime=voice_clone.generated_audio(job_id)
+                self.send_binary(mime,audio);return
             if endpoint in ("/api/engine/job","/api/engine/output"):
                 job_id=parse_qs(parsed.query).get("id",[""])[0]
                 if endpoint=="/api/engine/job":
@@ -250,12 +259,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(404,{"error":"Not found"})
     def do_POST(self):
         if not self.allowed():self.send_json(403,{"error":"Origin forbidden"});return
-        if self.path not in ("/api/llm","/api/tts","/api/engine/render","/api/setup/llm-config","/api/setup/llm-test"):self.send_json(404,{"error":"Not found"});return
+        if self.path not in ("/api/llm","/api/tts","/api/engine/render","/api/setup/llm-config","/api/setup/llm-test","/api/voice-clone/reference","/api/voice-clone/render"):self.send_json(404,{"error":"Not found"});return
         if not self.headers.get("Content-Type","").startswith("application/json"):
             self.send_json(415,{"error":"JSON required"});return
         try:
             size=int(self.headers.get("Content-Length","0"))
-            max_bytes=18_000_000 if self.path=="/api/engine/render" else 40_000
+            max_bytes=18_000_000 if self.path=="/api/engine/render" else (11_200_000 if self.path=="/api/voice-clone/reference" else 40_000)
             if not 0<size<=max_bytes:self.send_json(413,{"error":"Body too large or empty"});return
             body=json.loads(self.rfile.read(size).decode("utf-8"))
             if not isinstance(body,dict):raise ValueError("JSON 格式錯誤")
@@ -263,6 +272,8 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path=="/api/setup/llm-config":out=save_llm_config(body)
             elif self.path=="/api/setup/llm-test":out=test_llm_config()
             elif self.path=="/api/engine/render":out=engine_service.queue(body)
+            elif self.path=="/api/voice-clone/reference":out=voice_clone.upload_reference(body.get("audio_base64"),body.get("consent"))
+            elif self.path=="/api/voice-clone/render":out=voice_clone.render(body.get("text"),body.get("reference_token"),body.get("consent"))
             else:
                 text=body.get("text");voice=body.get("voice")
                 if not isinstance(text,str) or not 1<=len(text)<=1800:raise ValueError("旁白限 1-1800 字")
