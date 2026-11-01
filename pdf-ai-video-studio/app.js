@@ -16,6 +16,8 @@
     restore:$("restoreText"),download:$("downloadScript"),
     engine:$("aiEngine"),engineCheck:$("engineCheck"),engineInfo:$("engineDetails"),
     pythonStatus:$("pythonStatus"),comfyStatus:$("comfyStatus"),
+    browserStatus:$("browserStatus"),ffmpegStatus:$("ffmpegStatus"),
+    ollamaStatus:$("ollamaStatus"),gitStatus:$("gitStatus"),hardwareStatus:$("hardwareStatus"),
     clipPrompt:$("aiPrompt"),reference:$("referenceImage"),clipGenerate:$("generateAIClip"),
     clipStatus:$("engineResult")
   };
@@ -457,10 +459,21 @@
   // Optional heavyweight models are not silently downloaded. A reviewed
   // ComfyUI API workflow and compatible model must already be installed.
   async function checkAIEngine(){
+    // WebM codecs are built into the browser, not installed by our Python pip.
+    const canvasCapable=typeof ui.preview.captureStream==="function";
+    const recorderCapable=typeof MediaRecorder!=="undefined";
+    const codecCapable=recorderCapable&&typeof MediaRecorder.isTypeSupported==="function"&&
+      ["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"]
+        .some(format=>MediaRecorder.isTypeSupported(format));
+    const audioCapable=!!(window.AudioContext||window.webkitAudioContext);
+    ui.browserStatus.textContent=canvasCapable&&codecCapable&&audioCapable
+      ?"✓ 目前瀏覽器具備 Canvas、WebM、Web Audio 功能"
+      :"⚠ 缺少至少一項影音錄製能力；建議安裝最新版 Microsoft Edge";
     if(!state.service){
       state.engineStatus=null;
       ui.pythonStatus.textContent="未連線；請雙擊桌面版 EXE 執行檢查";
       ui.comfyStatus.textContent="無法檢測；請先啟動桌面版";
+      [ui.ffmpegStatus,ui.ollamaStatus,ui.gitStatus,ui.hardwareStatus].forEach(el=>el.textContent="本機服務未連線");
       ui.engineInfo.textContent="本機服務未連線。請使用桌面版啟動器。";
       updateUI();return;
     }
@@ -475,6 +488,19 @@
       ui.comfyStatus.textContent=result.comfyui_ready
         ? "本機 ComfyUI API 已連線（127.0.0.1:8188）"
         : "尚未偵測到執行中的 ComfyUI；如已安裝，請先啟動";
+      const dep=result.dependencies||{};
+      ui.ffmpegStatus.textContent=dep.ffmpeg_in_path
+        ?"✓ 系統 PATH 已找到 FFmpeg；仍須檢查模型工作流是否可使用"
+        :"未在系統 PATH 找到 FFmpeg；WebM 基礎輸出不需要，MuseTalk 可能需要";
+      ui.ollamaStatus.textContent=dep.ollama_api_ready
+        ?"✓ Ollama 本機 API 已回應；仍須確認已下載模型"
+        :"未偵測到運作中的 Ollama；如使用雲端 LLM 則不需要";
+      ui.gitStatus.textContent=dep.git_in_path
+        ?"✓ Git 命令可用"
+        :"未在系統 PATH 找到 Git；只有部分模型／自訂節點安裝會用到";
+      const disk=typeof dep.free_disk_gb==="number" ? "剩餘磁碟約 "+dep.free_disk_gb+" GB" : "磁碟剩餘空間未確認";
+      const driver=result.hardware?.driver ? "；NVIDIA 驅動 "+result.hardware.driver : "";
+      ui.hardwareStatus.textContent=disk+driver+"；請另行確認模型 GPU／PyTorch 相容性";
       const gpu=result.hardware?.gpu
         ?result.hardware.name+" · "+Math.round(result.hardware.vram_mb/1024)+"GB VRAM"
         :"未偵測 NVIDIA GPU（仍可使用一般 PDF 製片）";
@@ -485,6 +511,7 @@
       state.engineStatus=null;
       ui.pythonStatus.textContent="本機環境狀態無法取得";
       ui.comfyStatus.textContent="ComfyUI 連線檢查失敗";
+      [ui.ffmpegStatus,ui.ollamaStatus,ui.gitStatus,ui.hardwareStatus].forEach(el=>el.textContent="環境資訊未取得");
       ui.engineInfo.textContent="無法確認 ComfyUI：" + e.message;
       updateUI();
     }
